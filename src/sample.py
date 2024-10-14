@@ -29,7 +29,7 @@ optimizer.push_params(net.get_params())
 
 _trainer = trainer.Trainer(dataset, dataloader, net, loss_func, optimizer)
 
-for loss in _trainer.train(10, True):
+for loss in _trainer.train(1, True):
     print(loss)
 
 accuracy = 0
