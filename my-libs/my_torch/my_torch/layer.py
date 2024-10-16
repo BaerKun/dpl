@@ -1,5 +1,5 @@
 import numpy as np
-import param
+import my_torch.param as param
 
 # 各层输入tensor的数据不要修改
 

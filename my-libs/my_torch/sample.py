@@ -1,12 +1,6 @@
 import numpy as np
 
-import loss
-import optimizer
-import network
-import data
-import layer
-import transform
-import trainer
+from my_torch import optimizer, trainer, data, layer, network, loss, transform
 
 layers = [layer.Convolution2d(1, 32, 3, 1),
           layer.ReLU(),
@@ -20,7 +14,7 @@ layers = [layer.Convolution2d(1, 32, 3, 1),
           layer.Softmax()
           ]
 
-dataset = data.Dataset("../dataset/mnist.pkl", (transform.to_one_hot,))
+dataset = data.Dataset("../../dataset/mnist.pkl", (transform.to_one_hot,))
 dataloader = data.DataLoader(dataset, 64)
 net = network.NetWork(layers)
 loss_func = loss.CrossEntropyLoss()

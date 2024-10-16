@@ -1,7 +1,4 @@
-from typing import Any
-
 import numpy as np
-from numpy import floating
 
 '''
 所有支持 np.ndarray 的函数都可传递 float
