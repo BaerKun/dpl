@@ -2,6 +2,7 @@ import numpy as np
 import my_torch.param as param
 
 # 各层输入tensor的数据不要修改
+# 各层之间grad的shape不要修改
 
 
 def _to_tuple2(arg):
@@ -36,11 +37,18 @@ class Layer:
 
 class ReLU(Layer):
     __mask: np.ndarray
+    __out_tensor: np.ndarray = None
 
     def forward(self, tensor):
-        self.__mask = tensor > 0.
+        if self.__out_tensor is None:
+            self.__mask = np.ndarray(tensor.shape, dtype=np.bool_)
+            self.__out_tensor = np.ndarray(tensor.shape, dtype=np.float32)
 
-        return tensor * self.__mask
+        self.__mask[:] = tensor < 0.
+        tensor.copyto(self.__out_tensor)
+        self.__out_tensor[self.__mask] = 0
+
+        return self.__out_tensor
 
     def backward(self, grad):
         grad[self.__mask] = 0.
@@ -189,8 +197,7 @@ class Flatten(Layer):
         return tensor.reshape(self.out_shape)
 
     def backward(self, grad):
-        grad.resize(self.original_shape)
-        return grad
+        return grad.reshape(self.original_shape)
 
     def get_restore_params(self):
         param_dict = dict(start_dim=self.start_dim, end_dim=self.end_dim)
@@ -205,7 +212,7 @@ class Normalization(Layer):
     __out_tensor: np.ndarray = None
     __mean_std: np.ndarray = None
     __N: int = None
-    __out_grad: np.ndarray
+    __out_grad: np.ndarray = None
 
     def __init__(self):
         super().__init__()
@@ -265,6 +272,7 @@ class Normalization(Layer):
 
 class Dropout(Layer):
     __mask: np.ndarray = None
+    __out_tensor: np.ndarray = None
 
     def __init__(self, dropout_rate=0.2, train=True):
         super().__init__()
@@ -273,10 +281,17 @@ class Dropout(Layer):
 
     def forward(self, tensor):
         if self.train:
-            self.__mask = np.random.rand(*tensor.shape) > self.dropout_rate
-            return tensor * self.__mask
+            if self.__mask is None:
+                self.__mask = np.ndarray(tensor.shape, dtype=np.bool_)
+                self.__out_tensor = np.ndarray(tensor.shape, dtype=np.float32)
 
-        return tensor * (1 - self.dropout_rate)
+            self.__mask[:] = np.random.rand(*tensor.shape) < self.dropout_rate
+            self.__out_tensor[:] = tensor
+            self.__out_tensor[self.__mask] = 0.
+        else:
+            np.multiply(tensor, 1 - self.dropout_rate, out=self.__out_tensor)
+
+        return self.__out_tensor
 
     def backward(self, grad):
         grad[self.__mask] = 0.
@@ -292,77 +307,77 @@ class Dropout(Layer):
 
 
 class ConvPoolLayer(Layer):
-    filter_size: tuple
+    filter_shape: tuple
     stride: tuple
     padding: tuple
-    bitch: int = None
+    batch_size: int = None
     in_channels: int = None
-    input_size: tuple[int, int] = None
-    output_size: tuple[int, int] = None
+    input_shape: tuple[int, int] = None
+    output_shape: tuple[int, int] = None
     __im2col_static: np.ndarray = None
     __col2mg_static: np.ndarray = None
     __tensor_pad: np.ndarray = None
 
     def _get_output_size(self):
-        return (self.input_size[0] + 2 * self.padding[0] - self.filter_size[0]) // self.stride[0] + 1, \
-               (self.input_size[1] + 2 * self.padding[1] - self.filter_size[1]) // self.stride[1] + 1
+        return (self.input_shape[0] + 2 * self.padding[0] - self.filter_shape[0]) // self.stride[0] + 1, \
+               (self.input_shape[1] + 2 * self.padding[1] - self.filter_shape[1]) // self.stride[1] + 1
 
     def _first_init(self, input_shape):
-        bitch, in_channels, input_h, input_w = input_shape
-        self.input_size = (input_h, input_w)
-        self.bitch = bitch
+        batch_size, in_channels, input_h, input_w = input_shape
+        self.input_shape = (input_h, input_w)
+        self.batch_size = batch_size
         self.in_channels = in_channels
-        self.output_size = self._get_output_size()
+        self.output_shape = self._get_output_size()
         self.__tensor_pad = np.zeros(
-            (bitch, in_channels, input_h + 2 * self.padding[0], input_w + 2 * self.padding[1]), dtype=np.float32)
-        self.__im2col_static = np.ndarray((bitch, in_channels, *self.filter_size, *self.output_size), dtype=np.float32)
-        self.__col2mg_static = np.ndarray((bitch, in_channels,
+            (batch_size, in_channels, input_h + 2 * self.padding[0], input_w + 2 * self.padding[1]), dtype=np.float32)
+        self.__im2col_static = np.ndarray((batch_size, in_channels, *self.filter_shape, *self.output_shape), dtype=np.float32)
+        self.__col2mg_static = np.ndarray((batch_size, in_channels,
                                            input_h + 2 * self.padding[0] + self.stride[0] - 1,
                                            input_w + 2 * self.padding[1] + self.stride[1] - 1), dtype=np.float32)
 
     def _im2col(self, tensor):
-        self.__tensor_pad[:, :, self.padding[0]:self.padding[0] + self.input_size[0],
-        self.padding[1]:self.padding[1] + self.input_size[1]] = tensor
+        self.__tensor_pad[:, :, self.padding[0]:self.padding[0] + self.input_shape[0],
+        self.padding[1]:self.padding[1] + self.input_shape[1]] = tensor
 
-        for y in range(self.filter_size[0]):
-            y_max = y + self.stride[0] * self.output_size[0]
+        for y in range(self.filter_shape[0]):
+            y_max = y + self.stride[0] * self.output_shape[0]
 
-            for x in range(self.filter_size[1]):
-                x_max = x + self.stride[1] * self.output_size[1]
+            for x in range(self.filter_shape[1]):
+                x_max = x + self.stride[1] * self.output_shape[1]
                 self.__im2col_static[:, :, y, x, :, :] = self.__tensor_pad[:, :, y:y_max:self.stride[0],
                                                          x:x_max:self.stride[1]]
 
         return self.__im2col_static.transpose(0, 4, 5, 1, 2, 3).reshape(
-            self.bitch * self.output_size[0] * self.output_size[1], -1)
+            self.batch_size * self.output_shape[0] * self.output_shape[1], -1)
 
     def _col2im(self, col):
-        col = (col.reshape(self.bitch, *self.output_size, self.in_channels, *self.filter_size)
+        col = (col.reshape(self.batch_size, *self.output_shape, self.in_channels, *self.filter_shape)
                .transpose(0, 3, 4, 5, 1, 2))
 
         self.__col2mg_static.fill(0.0)
-        for y in range(self.filter_size[0]):
-            y_max = y + self.stride[0] * self.output_size[0]
+        for y in range(self.filter_shape[0]):
+            y_max = y + self.stride[0] * self.output_shape[0]
 
-            for x in range(self.filter_size[1]):
-                x_max = x + self.stride[1] * self.output_size[1]
+            for x in range(self.filter_shape[1]):
+                x_max = x + self.stride[1] * self.output_shape[1]
                 self.__col2mg_static[:, :, y:y_max:self.stride[0], x:x_max:self.stride[1]] += col[:, :, y, x, :, :]
 
-        return (self.__col2mg_static[:, :, self.padding[0]:self.input_size[0] + self.padding[0],
-                self.padding[1]:self.input_size[1] + self.padding[1]])
+        return (self.__col2mg_static[:, :, self.padding[0]:self.input_shape[0] + self.padding[0],
+                self.padding[1]:self.input_shape[1] + self.padding[1]])
 
-    def __init__(self, filter_size, stride, padding):
+    def __init__(self, filter_shape, stride, padding):
         super().__init__()
-        self.filter_size = _to_tuple2(filter_size)
+        self.filter_shape = _to_tuple2(filter_shape)
         self.stride = _to_tuple2(stride)
         self.padding = _to_tuple2(padding)
 
     def get_restore_params(self):
-        param_dict = dict(filter_size=self.filter_size, stride=self.stride, padding=self.padding,
-                          input_shape=(self.bitch, self.in_channels, *self.input_size))
+        param_dict = dict(filter_size=self.filter_shape, stride=self.stride, padding=self.padding,
+                          input_shape=(self.batch_size, self.in_channels, *self.input_shape))
         return param_dict
 
     def _restore(self, param_dict):
-        self.filter_size = param_dict["filter_size"]
+        self.filter_shape = param_dict["filter_size"]
         self.stride = param_dict["stride"]
         self.padding = param_dict["padding"]
 
@@ -371,17 +386,17 @@ class Convolution2d(ConvPoolLayer):
     __tensor_col = None
     __kernel_col = None
 
-    def __init__(self, in_channels, out_channels, kernel_size, stride=(1, 1), padding=(0, 0)):
-        super().__init__(kernel_size, stride, padding)
+    def __init__(self, in_channels, out_channels, kernel_shape, stride=(1, 1), padding=(0, 0)):
+        super().__init__(kernel_shape, stride, padding)
         self.in_channels = in_channels
         self.out_channels = out_channels
 
-        self.kernel = param.he(out_channels, in_channels, *self.filter_size)
-        self.kernel.data /= np.sqrt(self.filter_size[0] * self.filter_size[1])
+        self.kernel = param.he(out_channels, in_channels, *self.filter_shape)
+        self.kernel.data /= np.sqrt(self.filter_shape[0] * self.filter_shape[1])
         self.bias = param.Param(np.zeros(out_channels, dtype=np.float32))
 
     def forward(self, tensor):
-        if self.bitch is None:
+        if self.batch_size is None:
             self._first_init(tensor.shape)
 
         self.__tensor_col = self._im2col(tensor)
@@ -389,7 +404,7 @@ class Convolution2d(ConvPoolLayer):
 
         out_tensor = np.matmul(self.__tensor_col, self.__kernel_col)
         out_tensor += self.bias.data
-        out_tensor = out_tensor.reshape(self.bitch, *self.output_size, -1).transpose(0, 3, 1, 2)
+        out_tensor = out_tensor.reshape(self.batch_size, *self.output_shape, -1).transpose(0, 3, 1, 2)
 
         return out_tensor
 
@@ -399,7 +414,7 @@ class Convolution2d(ConvPoolLayer):
         np.mean(grad, axis=0, out=self.bias.grad)
 
         self.kernel.grad = np.matmul(self.__tensor_col.T, grad).transpose(1, 0)
-        self.kernel.grad.resize(self.out_channels, self.in_channels, *self.filter_size)
+        self.kernel.grad.resize(self.out_channels, self.in_channels, *self.filter_shape)
 
         out_grad = self._col2im(np.matmul(grad, self.__kernel_col.T))
         return out_grad
@@ -440,16 +455,16 @@ class MaxPool2d(ConvPoolLayer):
     def _first_init(self, input_shape):
         super()._first_init(input_shape)
 
-        rows_num = self.bitch * self.in_channels * self.output_size[0]
-        out_grad_size = rows_num * self.output_size[1]
+        rows_num = self.batch_size * self.in_channels * self.output_shape[0]
+        out_grad_size = rows_num * self.output_shape[1]
 
-        self.pool_area = self.filter_size[0] * self.filter_size[1]
+        self.pool_area = self.filter_shape[0] * self.filter_shape[1]
         self.grad_col = np.ndarray(out_grad_size * self.pool_area, dtype=np.float32)
-        self.grad_col_shape = (rows_num, self.output_size[1] * self.pool_area)
+        self.grad_col_shape = (rows_num, self.output_shape[1] * self.pool_area)
         self.arg_max = np.ndarray(out_grad_size, dtype=np.uint32)
 
     def forward(self, tensor):
-        if self.bitch is None:
+        if self.batch_size is None:
             self._first_init(tensor.shape)
 
         tensor_col = self._im2col(tensor).reshape(-1, self.pool_area)
@@ -457,7 +472,7 @@ class MaxPool2d(ConvPoolLayer):
         np.argmax(tensor_col, axis=1, out=self.arg_max)
 
         out_tensor = np.max(tensor_col, axis=1)
-        out_tensor.resize(self.bitch, *self.output_size, self.in_channels)
+        out_tensor.resize(self.batch_size, *self.output_shape, self.in_channels)
         out_tensor = out_tensor.transpose(0, 3, 1, 2)
 
         return out_tensor

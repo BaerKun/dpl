@@ -13,9 +13,7 @@ class NetWork:
 
         return tensor
 
-    def backward(self, loss):
-        grad = loss.backward()
-
+    def backward(self, grad):
         for _layer in reversed(self.layers):
             grad = _layer.backward(grad)
 

@@ -78,6 +78,6 @@ class AdaGrad(Optimizer):
             decay = self.lr_decay[i]
 
             decay += p.grad ** 2
-            decay[decay > 1e8] = 1e8
+            decay[decay > 1e4] = 1e4
 
             p.data -= self.grad_k * p.grad / decay ** 0.5

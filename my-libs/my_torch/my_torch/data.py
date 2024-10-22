@@ -24,9 +24,9 @@ class DataLoader:
     __labels: np.ndarray
     __number: int
 
-    def __init__(self, dataset, bitch, train=True):
+    def __init__(self, dataset, batch_size, train=True):
         self.dataset = dataset
-        self.bitch = bitch
+        self.batch_size = batch_size
 
         if train:
             self.to_train()
@@ -47,11 +47,14 @@ class DataLoader:
         return self
 
     def __next__(self):
-        if self.__index + self.bitch > self.__number:
+        if self.__index + self.batch_size > self.__number:
             raise StopIteration
 
-        datas = self.__datas[self.__index:self.__index + self.bitch]
-        labels = self.__labels[self.__index:self.__index + self.bitch]
+        datas = self.__datas[self.__index:self.__index + self.batch_size]
+        labels = self.__labels[self.__index:self.__index + self.batch_size]
 
-        self.__index += self.bitch
+        self.__index += self.batch_size
         return datas, labels
+
+    def __len__(self):
+        return self.__datas.shape[0]

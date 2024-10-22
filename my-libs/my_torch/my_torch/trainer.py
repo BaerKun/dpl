@@ -36,11 +36,13 @@ class Trainer:
                 indata, target = self.dataloader.__next__()
                 output = self.model.forward(indata)
                 loss = self.loss_function(output, target)
-                self.model.backward(loss)
+                grad = self.loss_function.backward()
+                self.model.backward(grad)
                 self.optimizer.step()
 
+                self.total_loss += loss.item()
+
                 if self.each_bitch:
-                    self.total_loss += loss.item()
                     return loss.item()
 
         except StopIteration:
