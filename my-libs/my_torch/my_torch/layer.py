@@ -39,13 +39,13 @@ class ReLU(Layer):
     __mask: np.ndarray
     __out_tensor: np.ndarray = None
 
-    def forward(self, tensor):
+    def forward(self, tensor: np.ndarray):
         if self.__out_tensor is None:
             self.__mask = np.ndarray(tensor.shape, dtype=np.bool_)
             self.__out_tensor = np.ndarray(tensor.shape, dtype=np.float32)
 
         self.__mask[:] = tensor < 0.
-        tensor.copyto(self.__out_tensor)
+        self.__out_tensor[:] = tensor
         self.__out_tensor[self.__mask] = 0
 
         return self.__out_tensor
@@ -330,7 +330,8 @@ class ConvPoolLayer(Layer):
         self.output_shape = self._get_output_size()
         self.__tensor_pad = np.zeros(
             (batch_size, in_channels, input_h + 2 * self.padding[0], input_w + 2 * self.padding[1]), dtype=np.float32)
-        self.__im2col_static = np.ndarray((batch_size, in_channels, *self.filter_shape, *self.output_shape), dtype=np.float32)
+        self.__im2col_static = np.ndarray((batch_size, in_channels, *self.filter_shape, *self.output_shape),
+                                          dtype=np.float32)
         self.__col2mg_static = np.ndarray((batch_size, in_channels,
                                            input_h + 2 * self.padding[0] + self.stride[0] - 1,
                                            input_w + 2 * self.padding[1] + self.stride[1] - 1), dtype=np.float32)

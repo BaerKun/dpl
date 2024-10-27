@@ -16,7 +16,10 @@ class Dataset:
     
     def get_test(self):
         return self.datas["test_datas"], self.datas["test_labels"]
-        
+
+    def save(self, path):
+        pickle.dump(self.datas, open(path, "wb"))
+
 
 class DataLoader:
     __index: int

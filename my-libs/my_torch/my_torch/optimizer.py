@@ -3,7 +3,6 @@ import numpy as np
 
 class Optimizer:
     param_list: list
-    grad_k: np.float32
 
     def __init__(self, lr, weight_decay_rate=0.):
         self.lr = lr
@@ -12,15 +11,12 @@ class Optimizer:
     def push_params(self, param_list):
         self.param_list = param_list
 
-    def init_grad_k(self):
-        self.grad_k = self.lr
-        if self.weight_decay_rate > 0.0:
-            sum_l2 = 0.0
+    def weight_decay(self):
+        if self.weight_decay_rate <= 0:
+            return
 
-            for param in self.param_list:
-                sum_l2 += np.linalg.norm(param.grad)
-
-            self.grad_k *= 1.0 + self.weight_decay_rate * sum_l2
+        for p in self.param_list:
+            p.data -= self.lr * self.weight_decay_rate * p.data
 
     def step(self):
         pass
@@ -28,9 +24,9 @@ class Optimizer:
 
 class SGD(Optimizer):
     def step(self):
-        self.init_grad_k()
+        self.weight_decay()
         for p in self.param_list:
-            p.data -= self.grad_k * p.grad
+            p.data -= self.lr * p.grad
 
 
 class Momentum(Optimizer):
@@ -49,12 +45,12 @@ class Momentum(Optimizer):
             self.delta[i] = np.zeros(param_list[i].shape, dtype=np.float32)
 
     def step(self):
-        self.init_grad_k()
+        self.weight_decay()
 
         for i in range(len(self.param_list)):
             p = self.param_list[i]
 
-            self.delta[i] = self.momentum * self.delta[i] - self.grad_k * p.grad
+            self.delta[i] = self.momentum * self.delta[i] - self.lr * p.grad
 
             p.data += self.delta[i]
 
@@ -71,7 +67,7 @@ class AdaGrad(Optimizer):
             self.lr_decay[i] = np.ones(param_list[i].shape, dtype=np.float32)
 
     def step(self):
-        self.init_grad_k()
+        self.weight_decay()
 
         for i in range(len(self.param_list)):
             p = self.param_list[i]
@@ -80,4 +76,4 @@ class AdaGrad(Optimizer):
             decay += p.grad ** 2
             decay[decay > 1e4] = 1e4
 
-            p.data -= self.grad_k * p.grad / decay ** 0.5
+            p.data -= self.lr * p.grad / decay ** 0.5

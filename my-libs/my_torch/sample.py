@@ -12,6 +12,7 @@ layers = [
     layer.Softmax()
 ]
 
+
 dataset = data.Dataset("../../data/mnist.pkl", (transform.to_one_hot,))
 dataloader = data.DataLoader(dataset, 512)
 net = network.NetWork(layers)
