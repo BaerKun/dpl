@@ -20,7 +20,7 @@ class Net(torch.nn.Module):
 str_label = ("T-shit", "Trouser", "Pullover", "Dress", "Coat", "Sandal", "Shirt", "Sneaker", "Bag", "Ankle Boot")
 
 mnist_test = torchvision.datasets.FashionMNIST(root='../data', transform=torchvision.transforms.ToTensor(),
-                                               train=False, download=True, )
+                                               train=False, download=True)
 
 mnist_loader = torch.utils.data.DataLoader(mnist_test, batch_size=64, shuffle=True)
 

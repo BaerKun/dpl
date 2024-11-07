@@ -16,7 +16,7 @@ class Optimizer:
             return
 
         for p in self.param_list:
-            p.data -= self.lr * self.weight_decay_rate * p.data
+            p.data -= self.weight_decay_rate * p.data
 
     def step(self):
         pass
@@ -30,7 +30,7 @@ class SGD(Optimizer):
 
 
 class Momentum(Optimizer):
-    delta: list
+    __delta: list
 
     def __init__(self, lr, momentum=0.5, weight_decay_rate=0.0):
         super().__init__(lr, weight_decay_rate)
@@ -40,9 +40,9 @@ class Momentum(Optimizer):
         super().push_params(param_list)
         length = len(param_list)
 
-        self.delta = [None] * length
+        self.__delta = [None] * length
         for i in range(length):
-            self.delta[i] = np.zeros(param_list[i].shape, dtype=np.float32)
+            self.__delta[i] = np.zeros(param_list[i].shape, dtype=np.float32)
 
     def step(self):
         self.weight_decay()
@@ -50,28 +50,28 @@ class Momentum(Optimizer):
         for i in range(len(self.param_list)):
             p = self.param_list[i]
 
-            self.delta[i] = self.momentum * self.delta[i] - self.lr * p.grad
+            self.__delta[i] = self.momentum * self.__delta[i] - self.lr * p.grad
 
-            p.data += self.delta[i]
+            p.data += self.__delta[i]
 
 
 class AdaGrad(Optimizer):
-    lr_decay: list
+    __lr_decay: list
 
     def push_params(self, param_list):
         self.param_list = param_list
         length = len(param_list)
 
-        self.lr_decay = [None] * length
+        self.__lr_decay = [None] * length
         for i in range(length):
-            self.lr_decay[i] = np.ones(param_list[i].shape, dtype=np.float32)
+            self.__lr_decay[i] = np.ones(param_list[i].shape, dtype=np.float32)
 
     def step(self):
         self.weight_decay()
 
         for i in range(len(self.param_list)):
             p = self.param_list[i]
-            decay = self.lr_decay[i]
+            decay = self.__lr_decay[i]
 
             decay += p.grad ** 2
             decay[decay > 1e4] = 1e4

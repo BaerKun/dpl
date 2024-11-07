@@ -1,8 +1,8 @@
 class Trainer:
-    epoch: int
     current: int
-    each_bitch: bool
     total_loss: float
+    __epoch: int
+    __each_bitch: bool
 
     def __init__(self, dataset, dataloader, model, loss_function, optimizer):
         self.dataset = dataset
@@ -14,8 +14,8 @@ class Trainer:
         optimizer.push_params(model.get_params())
 
     def train(self, epoch, each_bitch=False):
-        self.epoch = epoch
-        self.each_bitch = each_bitch
+        self.__epoch = epoch
+        self.__each_bitch = each_bitch
         self.dataloader.to_train()
 
         return self
@@ -28,7 +28,7 @@ class Trainer:
         return self
 
     def __next__(self):
-        if self.current >= self.epoch:
+        if self.current >= self.__epoch:
             raise StopIteration
 
         try:
@@ -42,7 +42,7 @@ class Trainer:
 
                 self.total_loss += loss.item()
 
-                if self.each_bitch:
+                if self.__each_bitch:
                     return loss.item()
 
         except StopIteration:
