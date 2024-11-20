@@ -57,17 +57,3 @@ def softmax(_x: np.ndarray) -> np.ndarray:
     _sum_reciprocal = 1 / np.sum(_exp)
 
     return _exp * _sum_reciprocal
-
-
-def func_1(_x):
-    return sigmoid(_x)
-
-
-def func_2(_x):
-    return sigmoid(_x[0] + _x[1])
-
-
-if __name__ == '__main__':
-    x = np.random.rand(10)
-    y = np.random.rand(2)
-    print(x, '\n', y)

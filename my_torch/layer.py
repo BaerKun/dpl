@@ -220,22 +220,36 @@ class Normalization(Layer):
     __N: int = None
     __out_grad: np.ndarray = None
 
-    def __init__(self):
+    def __init__(self, dim=None):
         super().__init__()
         self.wight = param.Param(np.array(1., dtype=np.float32))
         self.bias = param.Param(np.array(0., dtype=np.float32))
+        self.__dim = dim
 
-    def forward(self, tensor):
+    def forward(self, tensor:np.ndarray):
         if self.__N is None:
-            self.__N = tensor.shape[-1]
-            self.__mean_std = np.ndarray((*tensor.shape[:-1], 1), dtype=np.float32)
+            __mean_std_shape = list(tensor.shape)
+            if isinstance(self.__dim, int):
+                self.__N = tensor.shape[self.__dim]
+                __mean_std_shape[self.__dim] = 1
+            else:
+                if self.__dim is None:
+                    self.__dim = tuple(range(tensor.ndim))
+                else:
+                    self.__dim = tuple(self.__dim)
+                self.__N = 1
+                for i in self.__dim:
+                    self.__N *= tensor.shape[i]
+                    __mean_std_shape[i] = 1
+
+            self.__mean_std = np.ndarray(__mean_std_shape, dtype=np.float32)
             self.__out_tensor = np.ndarray(tensor.shape, dtype=np.float32)
             self.__out_grad = np.ndarray(tensor.shape, dtype=np.float32)
 
-        tensor.mean(axis=-1, keepdims=True, out=self.__mean_std)
+        tensor.mean(axis=self.__dim, keepdims=True, out=self.__mean_std)
         np.subtract(tensor, self.__mean_std, out=self.__out_tensor)
 
-        tensor.std(axis=-1, keepdims=True, out=self.__mean_std)
+        tensor.std(axis=self.__dim, keepdims=True, out=self.__mean_std)
         self.__mean_std += 1e-7
 
         self.__out_tensor *= self.wight.data
@@ -259,13 +273,16 @@ class Normalization(Layer):
 
         return self.__out_grad
 
+
     def get_params(self, params_list):
         params_list.append(self.wight)
         params_list.append(self.bias)
 
+
     def get_restore_params(self):
         param_dict = dict(wight=self.wight.data, bias=self.bias.data)
         return param_dict
+
 
     @staticmethod
     def restore(param_dict):
@@ -481,7 +498,8 @@ class MaxPool2d(ConvPoolLayer):
         np.argmax(tensor_col, axis=1, keepdims=True, out=self.__arg_max)
         self._out_tensor_col[:] = np.take_along_axis(tensor_col, self.__arg_max, axis=1)
 
-        return self._out_tensor_col.reshape(self._batch_size, *self._output_shape, self._in_channels).transpose(0, 3, 1, 2)
+        return self._out_tensor_col.reshape(self._batch_size, *self._output_shape, self._in_channels).transpose(0, 3, 1,
+                                                                                                                2)
 
     def backward(self, grad):
         grad = grad.transpose(0, 2, 3, 1)

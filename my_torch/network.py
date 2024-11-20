@@ -25,6 +25,9 @@ class NetWork:
 
         return tensor
 
+    def __call__(self, tensor):
+        return self.forward(tensor)
+
     def backward(self, grad):
         for _layer in reversed(self.layers):
             grad = _layer.backward(grad)
