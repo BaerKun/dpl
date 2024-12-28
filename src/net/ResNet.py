@@ -42,6 +42,10 @@ net = nn.Sequential(
     nn.Linear(512, 10)
 )
 
-mm = utils.ModelManager(net)
+mm = utils.ModelManager("../../model/resnet.pt")
 loader, _ = utils.load_fashion_mnist(128, 96)
-mm.train(loader, nn.CrossEntropyLoss(), 5)
+mm.train(loader, nn.CrossEntropyLoss(), 10, 0.000001)
+loader, _ = utils.load_fashion_mnist(128, 96, False)
+mm.test(loader, mode="acc")
+
+# mm.save("../../model/resnet.pt")
