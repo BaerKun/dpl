@@ -46,9 +46,9 @@ def densenet(in_channels, growth_rate, num_convs: list[int]):
 
 net = densenet(1, 32, [4, 4, 4, 4])
 mm = utils.ModelManager('../../model/densenet.pt')
-loader, _ = utils.load_fashion_mnist(128, 96)
+loader = utils.load_fashion_mnist(128, 96)
 mm.train(loader, nn.CrossEntropyLoss(), 10, 0.00001)
-loader, str_label = utils.load_fashion_mnist(128, 96, False)
+loader = utils.load_fashion_mnist(128, 96, False)
 mm.test(loader, mode="acc")
 mm.save('../../model/densenet.pt')
 

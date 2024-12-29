@@ -43,9 +43,9 @@ net = nn.Sequential(
 )
 
 mm = utils.ModelManager("../../model/resnet.pt")
-loader, _ = utils.load_fashion_mnist(128, 96)
+loader = utils.load_fashion_mnist(128, 96)
 mm.train(loader, nn.CrossEntropyLoss(), 10, 0.000001)
-loader, _ = utils.load_fashion_mnist(128, 96, False)
+loader = utils.load_fashion_mnist(128, 96, False)
 mm.test(loader, mode="acc")
 
 # mm.save("../../model/resnet.pt")

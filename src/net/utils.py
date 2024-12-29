@@ -1,5 +1,8 @@
 import torch
 import numpy as np
+import os
+
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 class ModelManager:
@@ -11,7 +14,7 @@ class ModelManager:
         else:
             raise TypeError("model must be a torch.nn.Module or a path to a model.")
 
-    def train(self, train_loader: torch.utils.data.DataLoader, loss_function, epochs: int, lr: float = 0.001,
+    def train(self, train_loader: torch.utils.data.DataLoader, loss_f, epochs: int, lr: float=0.001,
               device: torch.device = None):
         device = self.__try_cuda(device)
 
@@ -29,12 +32,12 @@ class ModelManager:
             curr_iter = 0
             if not print_cuda_memory:
                 print(f"epoch {epoch}...")
-            for img, label in train_loader:
-                img = img.to(device)
-                label = label.to(device)
+            for x, y in train_loader:
+                x = x.to(device)
+                y = y.to(device)
 
-                y = self.model(img)
-                loss = loss_function(y, label)
+                y_hat = self.model(x)
+                loss = loss_f(y_hat, y)
                 total_loss += loss.item()
 
                 optimizer.zero_grad()
@@ -93,35 +96,79 @@ class ModelManager:
         return torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
-class Corpus(torch.utils.data.Dataset):
-    def __init__(self, root: str, num_steps: int, warm_up: int = 1):
-        with open(root, 'r') as f:
-            self.corpus = f.read().split()
-        self.__count_corpus(self.corpus)
-        self.num_steps = num_steps
-        self.warm_up = warm_up
+class PackedSeqDataset(torch.utils.data.Dataset):
+    def __init__(self, seq: torch.Tensor, num_steps, offset):
+        self.__num_sub_seqs = (len(seq) - offset - 1) // num_steps
+        invalid_end = self.__num_sub_seqs * num_steps + offset
+        self.data = seq[offset: invalid_end].reshape((self.__num_sub_seqs, num_steps))
+        self.label = seq[offset + 1: invalid_end + 1].reshape((self.__num_sub_seqs, num_steps))
 
-    def __count_corpus(self, corpus):
+    def __len__(self):
+        return self.__num_sub_seqs
+
+    def __getitem__(self, item):
+        return self.data[item], self.label[item]
+
+
+class Vocab:
+    def __init__(self, corpus, min_count=0):
         import collections
 
-        counter = collections.Counter(corpus)
-        self.vocab = {token: i for i, (token, count) in enumerate(counter.items())}
-        self.idx2token = tuple(self.vocab.keys())
-        self.corpus_idx = [self.vocab[token] for token in corpus]
+        token_counter = collections.Counter(corpus)
+        sorted_counter = sorted(token_counter.items(), key=lambda x: x[1])
+
+        self.token2idx = {'<unk>': 0}
+        self.idx2token = ['<unk>']
+
+        i = 1
+        for token, count in sorted_counter:
+            if count < min_count:
+                self.token2idx[token] = 0
+            else:
+                self.idx2token.append(token)
+                self.token2idx[token] = i
+                i += 1
+
+    def decode(self, indices) -> list[str]:
+        return [self.idx2token[idx] for idx in indices]
+
+    def encode(self, tokens) -> list[int]:
+        return [self.token2idx[token] for token in tokens]
+
+    def __len__(self):
+        return len(self.idx2token)
+
+
+class Corpus:
+    vocab: Vocab
+    corpus_idx: torch.Tensor
+
+    def __init__(self, root: str):
+        with open(root, 'r') as f:
+            self.corpus = f.read().split()
 
     def __len__(self):
         return len(self.corpus)
 
     def __getitem__(self, item):
-        return self.corpus_idx[item: item + self.num_steps], self.corpus_idx[
-                                                             item + self.warm_up: item + self.num_steps + 1]
+        return self.corpus[item]
+
+    def build_vocab(self, min_count=0):
+        self.vocab = Vocab(self.corpus, min_count)
+        self.corpus_idx = torch.tensor(self.vocab.encode(self.corpus))
+
+    def get_loader(self, batch_size, num_steps, random_offset=True, random_sample=False):
+        import random
+        packed_seq = PackedSeqDataset(self.corpus_idx, num_steps,
+                                      random.randint(0, num_steps - 1) if random_offset else 0)
+        return torch.utils.data.DataLoader(packed_seq, batch_size=batch_size, shuffle=random_sample, drop_last=True)
 
 
-def load_fashion_mnist(batch_size, size=28, train=True) -> tuple[torch.utils.data.DataLoader, list[str]]:
+def load_fashion_mnist(batch_size, size=28, train=True) -> torch.utils.data.DataLoader:
     import torchvision
 
-    str_label = ["T-shit", "Trouser", "Pullover", "Dress", "Coat", "Sandal", "Shirt", "Sneaker", "Bag", "Ankle Boot"]
-    mnist_train = torchvision.datasets.FashionMNIST(root='../../data',
+    # str_label = ["T-shit", "Trouser", "Pullover", "Dress", "Coat", "Sandal", "Shirt", "Sneaker", "Bag", "Ankle Boot"]
+    mnist_train = torchvision.datasets.FashionMNIST(root=os.path.join(project_root, "data"),
                                                     transform=torchvision.transforms.ToTensor() if size == 28 else
                                                     torchvision.transforms.Compose(
                                                         (torchvision.transforms.ToTensor(),
@@ -129,7 +176,14 @@ def load_fashion_mnist(batch_size, size=28, train=True) -> tuple[torch.utils.dat
                                                     , train=train, download=True)
     mnist_loader = torch.utils.data.DataLoader(mnist_train, batch_size=batch_size, shuffle=True)
 
-    return mnist_loader, str_label
+    return mnist_loader
+
+
+def load_wiki_text(mode: str = "train") -> Corpus:
+    import os
+
+    path = os.path.join(project_root, "data", "wikitext-2", f"wiki.{mode}.tokens")
+    return Corpus(path)
 
 
 def tensor2image(tensor: torch.Tensor) -> np.ndarray:

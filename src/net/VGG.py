@@ -28,7 +28,7 @@ def vgg11():
 
 
 net = vgg(1, [(1, 16), (1, 32), (2, 64), (2, 128), (2, 128)])
-loader, _ = utils.load_fashion_mnist(64, 224)
+loader = utils.load_fashion_mnist(64, 224)
 loss_func = torch.nn.CrossEntropyLoss()
 manage = utils.ModelManager(net)
 manage.train(loader, loss_func, 5)

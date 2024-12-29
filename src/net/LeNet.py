@@ -17,7 +17,7 @@ net = torch.nn.Sequential(
     torch.nn.Linear(84, 10)
 )
 
-loader, _ = utils.load_fashion_mnist(4096)
+loader = utils.load_fashion_mnist(4096)
 loss_func = torch.nn.CrossEntropyLoss()
 
 model_manager = utils.ModelManager(net)

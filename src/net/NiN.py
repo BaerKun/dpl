@@ -18,7 +18,7 @@ net = nn.Sequential(nin_block(1, 96, kernel_size=11, strides=4, padding=0),
                     nn.AdaptiveAvgPool2d(1),
                     nn.Flatten())
 
-loader, _ = utils.load_fashion_mnist(96, 224)
+loader = utils.load_fashion_mnist(96, 224)
 loss_f = nn.CrossEntropyLoss()
 mm = utils.ModelManager(net)
 mm.train(loader, loss_f, 5)

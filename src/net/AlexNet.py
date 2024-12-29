@@ -19,7 +19,7 @@ AlexNet = torch.nn.Sequential(
     nn.Linear(4096, 10)
 )
 
-loader, _ = utils.load_fashion_mnist(96, 224)
+loader = utils.load_fashion_mnist(96, 224)
 loss_func = torch.nn.CrossEntropyLoss()
 
 model_manager = utils.ModelManager(AlexNet)
