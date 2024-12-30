@@ -46,18 +46,14 @@ def densenet(in_channels, growth_rate, num_convs: list[int]):
 
 net = densenet(1, 32, [4, 4, 4, 4])
 mm = utils.ModelManager('../../model/densenet.pt')
-loader = utils.load_fashion_mnist(128, 96)
-mm.train(loader, nn.CrossEntropyLoss(), 10, 0.00001)
-loader = utils.load_fashion_mnist(128, 96, False)
-mm.test(loader, mode="acc")
-mm.save('../../model/densenet.pt')
 
-# for x, l in loader:
-#     y = mm.predict(x)
-#     probs = torch.softmax(y, dim=1)
-#     cls = probs.argmax(dim=1)
-#     img = utils.tensor2image(x[0])
-#     pred_l = str_label[cls[0]]
-#     prob = probs[0][cls[0]].item()
-#     if not utils.show_image(img, pred_l, prob):
-#         break
+# loader = utils.load_fashion_mnist(128, 96)
+# mm.train(loader, nn.CrossEntropyLoss(), 10, 0.00001)
+# mm.save('../../model/densenet.pt')
+
+loader, labels = utils.load_fashion_mnist(128, 96, False, get_labels=True)
+mm.test(loader, utils.score_acc)
+
+for x, y in loader:
+    if not mm.predict_with_image(x, labels):
+        break
