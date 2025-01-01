@@ -74,18 +74,20 @@ vocab = corpus.build_vocab(8)
 loader = corpus.get_loader(256, 16, random_sample=True)
 model = RNNModel(len(vocab), 256, 4, 512)
 
-# mm = utils.ModelManager(os.path.join(utils.project_root, "model", "rnn.pt"), seq2seq=True, output_state=True)
-mm = utils.ModelManager(model, seq2seq=True, output_state=True)
-mm.train(loader, nn.CrossEntropyLoss(), 10, 0.001, warmup_steps=4)
-mm.save(os.path.join(utils.project_root, "model", "rnn.pt"))
+mm = utils.ModelManager(os.path.join(utils.project_root, "model", "rnn.pt"), seq2seq=True, output_state=True)
+# mm = utils.ModelManager(model, seq2seq=True, output_state=True)
+# mm.train(loader, nn.CrossEntropyLoss(), 20, 0.001, warmup_steps=4)
+# mm.save(os.path.join(utils.project_root, "model", "rnn.pt"))
 
-import random
+state = None
+while True:
+    question = input("You: ")
+    if not question:
+        break
+    q_tensor = vocab.encode_from_str(question)
+    answer_tensor, state = mm.predict_seq(q_tensor, 40, state)
+    answer = vocab.decode2str(answer_tensor[0])
+    print("Bot: ", answer)
 
-for _ in range(10):
-    start = random.randint(0, len(corpus.tensor_dataset) - 8)
-    t = corpus.tensor_dataset[start: start + 16]
-    pred_t = mm.predict_seq(t.reshape(1, -1), 16)
-    pred_t = vocab.decode(pred_t[0])
-    print(" ".join(vocab.decode(t)))
-    print(" ".join(pred_t))
-    print()
+
+

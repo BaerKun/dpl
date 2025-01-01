@@ -6,7 +6,42 @@ project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(_
 try_cuda = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
+def _word_tokenize(text: str, lower=True, filter_stopwords=False, filter_punctuation=False, user_filter=None):
+    import nltk
+
+    def __download_nltk():
+        nltk.download('punkt_tab')
+        nltk.download('punkt')
+        nltk.download('stopwords')
+
+    def __word_tokenize(_text, _lower, _filter_stopwords, _filter_punctuation, _user_filter):
+        filter_set = set() if _user_filter is None else _user_filter
+        if _filter_stopwords:
+            stopwords = set(nltk.corpus.stopwords.words('english'))
+            filter_set |= stopwords
+        if _filter_punctuation:
+            import string
+            punctuation = set(string.punctuation)
+            filter_set |= punctuation
+        if _lower:
+            _text = _text.lower()
+
+        _text = nltk.word_tokenize(_text)  # 主要的性能消耗
+        if len(filter_set) != 0:
+            _text = [token for token in _text if token not in filter_set]
+
+        return _text
+
+    # 初次使用先运行 download_nltk
+    try:
+        return __word_tokenize(text, lower, filter_stopwords, filter_punctuation, user_filter)
+    except LookupError:
+        __download_nltk()
+        return __word_tokenize(text, lower, filter_stopwords, filter_punctuation, user_filter)
+
+
 class ModelManager:
+    model: torch.nn.Module
     def __init__(self, model: torch.nn.Module | str, seq2seq=False, output_state=False):
         if isinstance(model, torch.nn.Module):
             self.model = model
@@ -98,12 +133,15 @@ class ModelManager:
         torch.save(self.model, path)
 
     # return (batch_size, predict_steps)
-    def predict_seq(self, x: torch.Tensor, predict_steps, device: torch.device = try_cuda) -> torch.Tensor:
+    def predict_seq(self, x: torch.Tensor, predict_steps, init_state: torch.Tensor = None,
+                    device: torch.device = try_cuda) -> (torch.Tensor, torch.Tensor):
         self.model.to(device)
         self.model.eval()
         x = x.to(device)
 
-        y_hat, state = self.model(x)
+        if x.ndim == 1:
+            x = x.unsqueeze(0)
+        y_hat, state = self.model(x, init_state)
         y_prev = y_hat[:, -1].argmax(dim=1, keepdims=True)
         y_pred = [y_prev]
 
@@ -112,7 +150,7 @@ class ModelManager:
             y_prev = y_hat.argmax(dim=2)
             y_pred.append(y_prev)
 
-        return torch.cat(y_pred, dim=1)
+        return torch.cat(y_pred, dim=1), state
 
     def predict_with_image(self, x: torch.Tensor, str_labels=None, device: torch.device = try_cuda) -> bool:
         self.model.to(device)
@@ -152,8 +190,16 @@ class Vocab:
     def decode(self, indices) -> list[str]:
         return [self.idx2token[idx] if idx < self.vocab_size else '<unk>' for idx in indices]
 
-    def encode(self, tokens) -> list[int]:
-        return [self.token2idx[token] if token in self.token2idx else self.vocab_size - 1 for token in tokens]
+    def decode2str(self, indices) -> str:
+        return ' '.join(self.decode(indices))
+
+    def encode(self, tokens) -> torch.Tensor:
+        return torch.tensor([self.token2idx[token]
+                             if token in self.token2idx else self.vocab_size - 1 for token in tokens],
+                            dtype=torch.int64)
+
+    def encode_from_str(self, text: str) -> torch.Tensor:
+        return self.encode(_word_tokenize(text))
 
     def __len__(self):
         return self.vocab_size
@@ -182,18 +228,13 @@ class Vocab:
         return vocab
 
 
-# 初次使用先运行 download_nltk
 class Corpus:
     tensor_dataset: torch.Tensor
 
-    def __init__(self, root: str, lower=True, filter_stopwords=False, filter_punctuation=False, user_filter:set[str]=None):
+    def __init__(self, root: str, lower=True, filter_stopwords=False, filter_punctuation=False,
+                 user_filter: set[str] = None):
         with open(root, 'r') as f:
-            corpus = f.read()
-        try:
-            self.corpus = self.__preprocess_text(corpus, lower, filter_stopwords, filter_punctuation, user_filter)
-        except LookupError:
-            self.__download_nltk()
-            self.corpus = self.__preprocess_text(corpus, lower, filter_stopwords, filter_punctuation, user_filter)
+            self.corpus = _word_tokenize(f.read(), lower, filter_stopwords, filter_punctuation, user_filter)
 
     def __len__(self):
         return len(self.corpus)
@@ -203,45 +244,15 @@ class Corpus:
 
     def build_vocab(self, min_freq=0, max_vocab_size=None) -> Vocab:
         vocab = Vocab(self.corpus, min_freq, max_vocab_size)
-        self.tensor_dataset = torch.tensor(vocab.encode(self.corpus))
+        self.tensor_dataset = vocab.encode(self.corpus)
         print("vocab size: ", len(vocab))
         return vocab
 
-    def get_loader(self, batch_size, num_steps, random_offset=True, random_sample=False):
+    def get_loader(self, batch_size, num_steps, random_offset=True, random_sample=True):
         import random
         packed_seq = PackedSeqDataset(self.tensor_dataset, num_steps,
                                       random.randint(0, num_steps - 1) if random_offset else 0)
         return torch.utils.data.DataLoader(packed_seq, batch_size=batch_size, shuffle=random_sample, drop_last=True)
-
-    @staticmethod
-    def __preprocess_text(corpus, lower, filter_stopwords, filter_punctuation, user_filter):
-        import nltk
-
-        filter_set = set() if user_filter is None else user_filter
-        if filter_stopwords:
-            stopwords = set(nltk.corpus.stopwords.words('english'))
-            filter_set |= stopwords
-        if filter_punctuation:
-            import string
-            punctuation = set(string.punctuation)
-            filter_set |= punctuation
-        if lower:
-            corpus = corpus.lower()
-
-        corpus = nltk.word_tokenize(corpus) # 主要的性能消耗
-        if len(filter_set) != 0:
-            corpus = [token for token in corpus if token not in filter_set]
-
-        return corpus
-
-    @staticmethod
-    def __download_nltk():
-        import nltk
-
-        nltk.download('punkt_tab')
-        nltk.download('punkt')
-        nltk.download('stopwords')
-
 
 
 def load_fashion_mnist(batch_size, size=28, train=True, get_labels=False):
