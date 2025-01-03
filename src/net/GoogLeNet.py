@@ -47,7 +47,7 @@ net = nn.Sequential(
     nn.Linear(1024, 10)
 )
 
-mm = utils.ModelManager("../../model/google_net1.pt")
+mm = utils.ModelManager(net, "../../model/google_net1.pt")
 loader = utils.load_fashion_mnist(128, 96)
 loss_f = nn.CrossEntropyLoss()
 mm.train(loader, loss_f, 20, 0.01)

@@ -1,5 +1,4 @@
 import torch
-import torchvision
 import utils
 
 net = torch.nn.Sequential(

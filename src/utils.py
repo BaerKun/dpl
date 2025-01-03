@@ -2,7 +2,7 @@ import torch
 import numpy as np
 import os
 
-project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 try_cuda = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
@@ -42,14 +42,10 @@ def _word_tokenize(text: str, lower=True, filter_stopwords=False, filter_punctua
 
 class ModelManager:
     model: torch.nn.Module
-    def __init__(self, model: torch.nn.Module | str, seq2seq=False, output_state=False):
-        if isinstance(model, torch.nn.Module):
-            self.model = model
-        elif isinstance(model, str):
-            self.model = torch.load(model)
-        else:
-            raise TypeError("model must be a torch.nn.Module or a path to a model.")
-
+    def __init__(self, model: torch.nn.Module, weights_path:str=None, seq2seq=False, output_state=False):
+        self.model = model
+        if weights_path is not None:
+            self.model.load_state_dict(torch.load(weights_path, weights_only=True))
         self.__seq2seq = seq2seq
         self.__output_state = output_state
 
@@ -111,11 +107,11 @@ class ModelManager:
             x = x.to(device)
             y = y.to(device)
 
-            y_hat = self.model(x)
-            if self.__output_state:
-                y_hat = y_hat[0]
-
-            score += score_f(y_hat, y)
+            with torch.no_grad():
+                y_hat = self.model(x)
+                if self.__output_state:
+                    y_hat = y_hat[0]
+                score += score_f(y_hat, y)
 
             curr_iter += 1
             if curr_iter % 5 == 0:
@@ -126,11 +122,13 @@ class ModelManager:
     def predict(self, x: torch.Tensor, device: torch.device = try_cuda):
         self.model.to(device)
         self.model.eval()
-        x = x.to(device)
-        return self.model(x)
+        with torch.no_grad():
+            x = x.to(device)
+            y = self.model(x)
+        return y
 
     def save(self, path: str):
-        torch.save(self.model, path)
+        torch.save(self.model.state_dict(), path)
 
     # return (batch_size, predict_steps)
     def predict_seq(self, x: torch.Tensor, predict_steps, init_state: torch.Tensor = None,
@@ -283,13 +281,15 @@ def tensor2image(tensor: torch.Tensor) -> np.ndarray:
     if tensor.device.type == 'cuda':
         tensor = tensor.cpu()
     img_np = tensor.permute(1, 2, 0).numpy()
-    img_np *= 255
+    img_np = img_np * 255
     return img_np.astype(np.uint8)
 
 
-def show_image(image: np.ndarray, label: str, prob: float = None) -> bool:
+def show_image(image: np.ndarray, label: str=None, prob: float = None) -> bool:
     import cv2
 
+    if label is None:
+        label = ''
     if prob is not None:
         label += f" {prob:.2f}"
     cv2.putText(image, label, (0, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)

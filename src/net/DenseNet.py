@@ -45,7 +45,7 @@ def densenet(in_channels, growth_rate, num_convs: list[int]):
 
 
 net = densenet(1, 32, [4, 4, 4, 4])
-mm = utils.ModelManager('../../model/densenet.pt')
+mm = utils.ModelManager(net, '../../model/densenet.pt')
 
 # loader = utils.load_fashion_mnist(128, 96)
 # mm.train(loader, nn.CrossEntropyLoss(), 10, 0.00001)

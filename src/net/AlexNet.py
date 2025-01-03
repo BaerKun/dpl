@@ -1,4 +1,4 @@
-import torch, torchvision
+import torch
 from torch import nn
 import utils
 
