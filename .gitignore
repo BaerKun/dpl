@@ -1,5 +1,6 @@
 .idea
 data
-model
+weights
 __pycache__
+images
 tmp*

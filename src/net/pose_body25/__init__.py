@@ -7,4 +7,4 @@ Created on Tue Apr 28 18:47:14 2020
 """
 
 from .model import PoseBody25
-from .posebody25detector import PoseBody25Detector, draw_body_pose
+from .posebody25detector import PoseBody25Detector

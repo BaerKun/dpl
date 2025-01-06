@@ -6,13 +6,20 @@ from scipy.ndimage.filters import gaussian_filter
 import torch
 from model import Joint, Skeleton
 
+# 连接到关节点和paf_xy的映射
+# 从颈部向四肢和头部关节点的拓扑排序，保证遍历时，当前连接不可能指向已遍历过的关节点
 
-def draw_body_pose(img, skeletons: list[Skeleton]):
+map2joints = [[1, 8], [1, 2], [1, 5], [2, 3], [3, 4], [5, 6], [6, 7], [8, 9], [9, 10], [10, 11], [8, 12], [12, 13],
+              [13, 14], [1, 0], [0, 15], [15, 17],
+              [0, 16], [16, 18], [2, 17], [5, 18], [14, 19], [19, 20], [14, 21], [11, 22], [22, 23], [11, 24]]
+
+map2paf = [[0, 1], [14, 15], [22, 23], [16, 17], [18, 19], [24, 25], [26, 27], [6, 7], [2, 3], [4, 5], [8, 9], [10, 11], [12, 13], [30, 31], [32, 33],
+           [36, 37], [34, 35], [38, 39], [20, 21], [28, 29], [40, 41], [42, 43], [44, 45], [46, 47], [48, 49], [50, 51]]
+
+
+def draw_body_pose(img: np.ndarray, skeletons: list[Skeleton]):
     stick_width = 4
 
-    limbs = [[1, 0], [1, 2], [2, 3], [3, 4], [1, 5], [5, 6], [6, 7], [1, 8], [8, 9], [9, 10],
-             [10, 11], [8, 12], [12, 13], [13, 14], [0, 15], [0, 16], [15, 17], [16, 18],
-             [11, 24], [11, 22], [14, 21], [14, 19], [22, 23], [19, 20]]
     colors = [[255, 0, 0], [255, 85, 0], [255, 170, 0], [255, 255, 0], [170, 255, 0], [85, 255, 0], [0, 255, 0],
               [0, 255, 85], [0, 255, 170], [0, 255, 255], [0, 170, 255], [0, 85, 255], [0, 0, 255], [85, 0, 255],
               [170, 0, 255], [255, 0, 255], [255, 0, 170], [255, 0, 85], [255, 255, 0], [255, 255, 85], [255, 255, 170],
@@ -24,7 +31,7 @@ def draw_body_pose(img, skeletons: list[Skeleton]):
             cv2.circle(img, joint.xy, 4, color, thickness=-1)
 
     for skel in skeletons:
-        for limb, color in zip(limbs, colors):
+        for limb, color in zip(map2joints, colors):
             joint0 = skel[limb[0]]
             joint1 = skel[limb[1]]
             if joint0 is None or joint1 is None:
@@ -110,8 +117,7 @@ def get_joints_from_heatmaps(heatmaps: np.ndarray, threshold: float) -> list[lis
     return joints
 
 
-def get_limbs_from_paf(joints: list[list[Joint]], paf: np.ndarray, map2joints, map2paf, ori_img_w, threshold) -> \
-        list[(Joint, Joint, float)]:
+def get_limbs_from_paf(joints: list[list[Joint]], paf: np.ndarray, ori_img_w, threshold) -> list[(Joint, Joint, float)]:
     matched_limbs = []
     mid_num = 10
 
@@ -127,7 +133,7 @@ def get_limbs_from_paf(joints: list[list[Joint]], paf: np.ndarray, map2joints, m
             for joint0 in candidate_joint0:
                 for joint1 in candidate_joint1:
                     vec = np.subtract(joint1.xy, joint0.xy)
-                    norm = math.sqrt(vec[0] * vec[0] + vec[1] * vec[1])
+                    norm = np.sqrt(vec[0] * vec[0] + vec[1] * vec[1]).item()
                     if norm == 0.:
                         continue
                     vec = np.divide(vec, norm)
@@ -163,11 +169,11 @@ def get_limbs_from_paf(joints: list[list[Joint]], paf: np.ndarray, map2joints, m
     return matched_limbs
 
 
-def get_skeletons_from_limbs(limbs: list[(Joint, Joint, float)], map_joints: list[tuple[int, int]])->list[Skeleton]:
+def get_skeletons_from_limbs(limbs: list[(Joint, Joint, float)]) -> list[Skeleton]:
     candidate_skeleton = []
 
     # 躯干尝试搭建骨架
-    for (joint0_idx, joint1_idx), limb in zip(map_joints, limbs):
+    for (joint0_idx, joint1_idx), limb in zip(map2joints, limbs):
         if not limb:
             continue
         for joint0, joint1, score in limb:  # = 1:size(temp,1)
@@ -194,3 +200,46 @@ def get_skeletons_from_limbs(limbs: list[(Joint, Joint, float)], map_joints: lis
             skeletons.append(cand_skel)
 
     return skeletons
+
+
+def visualize_heatmap(heatmap: np.ndarray) -> np.ndarray:
+    img = heatmap.clip(min=0, max=1)
+    img *= 255
+    return img.astype(np.uint8)
+
+
+def visualize_paf(paf_x: np.ndarray, paf_y: np.ndarray) -> np.ndarray:
+    h, w = paf_x.shape
+    step = 8
+    threshold = 0.1
+
+    img = np.zeros((h, w), dtype=np.uint8)
+    for y in range(0, h, step):
+        for x in range(0, w, step):
+            vx, vy = paf_x[y, x], paf_y[y, x]
+            magnitude = np.sqrt(vx ** 2 + vy ** 2)
+
+            if magnitude > threshold:
+                x_end = int(x + vx * step)
+                y_end = int(y + vy * step)
+                cv2.arrowedLine(img, (x, y), (x_end, y_end), 255, 1, tipLength=0.3)
+
+    return img
+
+
+def show_heatmaps_paf(heatmap: np.ndarray, paf: np.ndarray):
+    import matplotlib.pyplot as plt
+
+    heatmap_title_image = [(f'heatmap {i}', visualize_heatmap(_h)) for i, _h in enumerate(heatmap)]
+    paf_title_image = [(f'paf {start}-{end}', visualize_paf(paf[_x], paf[_y])) for (start, end), (_x, _y) in zip(map2joints, map2paf)]
+
+    flg, axes = plt.subplots(2, 26, figsize=(52, 4))
+
+    for col in range(26):
+        axes[0, col].imshow(heatmap_title_image[col][1])
+        axes[0, col].set_title(heatmap_title_image[col][0])
+        axes[1, col].imshow(paf_title_image[col][1])
+        axes[1, col].set_title(paf_title_image[col][0])
+
+    plt.tight_layout()
+    plt.show()
