@@ -26,11 +26,27 @@ def load_dict_from_npy(weight_file):
 
 
 class Joint:
-    def __init__(self, x: int, y: int, score: float):
-        self.x = x
-        self.y = y
-        self.xy = (x, y)
-        self.score = score
+    def __init__(self, x=-1, y=-1, score: float = 0.):
+        self.data = np.array((x, y, score), dtype=np.float32)
+
+    @property
+    def x(self):
+        return self.data[0]
+
+    @property
+    def y(self):
+        return self.data[1]
+
+    @property
+    def score(self):
+        return self.data[2]
+
+    @property
+    def xy(self):
+        return self.data[:2]
+
+    def get_image_coord(self):
+        return self.data[:2].astype(np.int32)
 
 
 class Skeleton:
@@ -38,12 +54,16 @@ class Skeleton:
         self.num_joints = num_joints
         self.score = score
         if joints is None:
-            self.joints = [None] * 25
+            self.joints = [Joint()] * 25
         else:
             self.joints = joints
 
     def get_joints_coord(self) -> np.ndarray:
-        return np.array([joint.xy for joint in self.joints], dtype=np.int32)
+        return np.array([joint.xy for joint in self.joints])
+
+    def resize(self, scale):
+        for joint in self.joints:
+            joint.data[:2] *= scale
 
     def __getitem__(self, item):
         return self.joints[item]

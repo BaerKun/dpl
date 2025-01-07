@@ -1,20 +1,26 @@
 import cv2
 import numpy as np
 import math
+import os
 
 from scipy.ndimage.filters import gaussian_filter
 import torch
+
 from model import Joint, Skeleton
 
 # 连接到关节点和paf_xy的映射
 # 从颈部向四肢和头部关节点的拓扑排序，保证遍历时，当前连接不可能指向已遍历过的关节点
-
 map2joints = [[1, 8], [1, 2], [1, 5], [2, 3], [3, 4], [5, 6], [6, 7], [8, 9], [9, 10], [10, 11], [8, 12], [12, 13],
               [13, 14], [1, 0], [0, 15], [15, 17],
               [0, 16], [16, 18], [2, 17], [5, 18], [14, 19], [19, 20], [14, 21], [11, 22], [22, 23], [11, 24]]
 
-map2paf = [[0, 1], [14, 15], [22, 23], [16, 17], [18, 19], [24, 25], [26, 27], [6, 7], [2, 3], [4, 5], [8, 9], [10, 11], [12, 13], [30, 31], [32, 33],
+map2paf = [[0, 1], [14, 15], [22, 23], [16, 17], [18, 19], [24, 25], [26, 27], [6, 7], [2, 3], [4, 5], [8, 9], [10, 11],
+           [12, 13], [30, 31], [32, 33],
            [36, 37], [34, 35], [38, 39], [20, 21], [28, 29], [40, 41], [42, 43], [44, 45], [46, 47], [48, 49], [50, 51]]
+
+map2str = ["Nose", "Neck", "RShoulder", "RElbow", "RWrist", "LShoulder", "LElbow", "LWrist", "MidHip", "RHip", "RKnee",
+           "RAnkle", "LHip", "LKnee", "LAnkle", "REye", "LEye", "REar", "LEar", "LBigToe", "LSmallToe", "LHeel",
+           "RBigToe", "RSmallToe", "RHeel", "Background"]
 
 
 def draw_body_pose(img: np.ndarray, skeletons: list[Skeleton]):
@@ -26,19 +32,19 @@ def draw_body_pose(img: np.ndarray, skeletons: list[Skeleton]):
               [255, 255, 255], [170, 255, 255], [85, 255, 255], [0, 255, 255]]
     for skel in skeletons:
         for joint, color in zip(skel.joints, colors):
-            if joint is None:
+            if joint.score < 0.1:
                 continue
-            cv2.circle(img, joint.xy, 4, color, thickness=-1)
+            cv2.circle(img, joint.get_image_coord(), 4, color, thickness=-1)
 
     for skel in skeletons:
         for limb, color in zip(map2joints, colors):
             joint0 = skel[limb[0]]
             joint1 = skel[limb[1]]
-            if joint0 is None or joint1 is None:
+            if joint0.score < 0.1 or joint1.score < 0.1:
                 continue
             cur_canvas = img.copy()
-            x0, y0 = joint0.xy
-            x1, y1 = joint1.xy
+            x0, y0 = joint0.get_image_coord()
+            x1, y1 = joint1.get_image_coord()
             dx = x1 - x0
             dy = y1 - y0
             length = math.sqrt(dx * dx + dy * dy)
@@ -51,7 +57,7 @@ def draw_body_pose(img: np.ndarray, skeletons: list[Skeleton]):
     return img
 
 
-def pad_down_right_corner(img: np.ndarray) -> (np.ndarray, (int, int)):
+def pad_down_right_corner(img: np.ndarray) -> np.ndarray:
     stride = 8
     pad_value = 128
     h, w, _ = img.shape
@@ -62,34 +68,32 @@ def pad_down_right_corner(img: np.ndarray) -> (np.ndarray, (int, int)):
         padded_img = img
     else:
         padded_img = cv2.copyMakeBorder(img, 0, pad_d, 0, pad_r, cv2.BORDER_CONSTANT, value=pad_value)
-    return padded_img, (pad_d, pad_r)
+    return padded_img
 
 
-def preprocess_image2tensor(img: np.ndarray, scale: float) -> (torch.Tensor, (int, int)):
+def preprocess_image2tensor(img: np.ndarray, scale: float) -> torch.Tensor:
     resized_img = cv2.resize(img, (0, 0), fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
-    padded_img, pad = pad_down_right_corner(resized_img)
+    padded_img = pad_down_right_corner(resized_img)
     im = np.transpose(np.float32(padded_img), (2, 0, 1)) / 256 - 0.5
     im = np.ascontiguousarray(im)
 
     data = torch.from_numpy(im).float()
     data.unsqueeze_(0)
-    return data, pad
+    return data
 
 
-def postprocess_heatmap_paf(heatmap: np.ndarray, paf: np.ndarray, pad: (int, int), output_shape: (int, int)):
+def postprocess_heatmap_paf(heatmap: np.ndarray, paf: np.ndarray, output_shape: (int, int)):
     stride = 8
 
     def __process(_x: np.ndarray):
         _y = np.transpose(np.squeeze(_x), (1, 2, 0))
-        _y = cv2.resize(_y, (0, 0), fx=stride, fy=stride, interpolation=cv2.INTER_CUBIC)
-        _y = _y[:_y.shape[0] - pad[0], :_y.shape[1] - pad[1]]
         _y = cv2.resize(_y, (output_shape[1], output_shape[0]), interpolation=cv2.INTER_CUBIC)
         return _y.transpose(2, 0, 1)
 
     return __process(heatmap), __process(paf)
 
 
-def get_joints_from_heatmaps(heatmaps: np.ndarray, threshold: float) -> list[list[Joint]]:
+def nms_heatmap(heatmaps: np.ndarray, threshold: float) -> list[list[Joint]]:
     joints = []
 
     for heatmap in heatmaps[:25]:
@@ -117,8 +121,8 @@ def get_joints_from_heatmaps(heatmaps: np.ndarray, threshold: float) -> list[lis
     return joints
 
 
-def get_limbs_from_paf(joints: list[list[Joint]], paf: np.ndarray, ori_img_w, threshold) -> list[(Joint, Joint, float)]:
-    matched_limbs = []
+def connect_joints(joints: list[list[Joint]], paf: np.ndarray, ori_img_w, threshold) -> list[(Joint, Joint, float)]:
+    matched_connections = []
     mid_num = 10
 
     # 用关节点向量和paf匹配，得到候选躯干
@@ -133,7 +137,7 @@ def get_limbs_from_paf(joints: list[list[Joint]], paf: np.ndarray, ori_img_w, th
             for joint0 in candidate_joint0:
                 for joint1 in candidate_joint1:
                     vec = np.subtract(joint1.xy, joint0.xy)
-                    norm = np.sqrt(vec[0] * vec[0] + vec[1] * vec[1]).item()
+                    norm = np.linalg.norm(vec).item()
                     if norm == 0.:
                         continue
                     vec = np.divide(vec, norm)
@@ -162,21 +166,21 @@ def get_limbs_from_paf(joints: list[list[Joint]], paf: np.ndarray, ori_img_w, th
                     if len(connection) >= min(num_joint0, num_joint1):
                         break
 
-            matched_limbs.append(connection)
+            matched_connections.append(connection)
         else:
-            matched_limbs.append([])
+            matched_connections.append([])
 
-    return matched_limbs
+    return matched_connections
 
 
-def get_skeletons_from_limbs(limbs: list[(Joint, Joint, float)]) -> list[Skeleton]:
+def rebuild_skeletons(connections: list[(Joint, Joint, float)]) -> list[Skeleton]:
     candidate_skeleton = []
 
     # 躯干尝试搭建骨架
-    for (joint0_idx, joint1_idx), limb in zip(map2joints, limbs):
-        if not limb:
+    for (joint0_idx, joint1_idx), connection in zip(map2joints, connections):
+        if not connection:
             continue
-        for joint0, joint1, score in limb:  # = 1:size(temp,1)
+        for joint0, joint1, score in connection:  # = 1:size(temp,1)
             for cand_skel in candidate_skeleton:  # 1:size(subset,1):
                 if cand_skel[joint0_idx] is joint0:
                     # 因为拓扑排序，只可能是id0出现重复，
@@ -230,8 +234,10 @@ def visualize_paf(paf_x: np.ndarray, paf_y: np.ndarray) -> np.ndarray:
 def show_heatmaps_paf(heatmap: np.ndarray, paf: np.ndarray):
     import matplotlib.pyplot as plt
 
-    heatmap_title_image = [(f'heatmap {i}', visualize_heatmap(_h)) for i, _h in enumerate(heatmap)]
-    paf_title_image = [(f'paf {start}-{end}', visualize_paf(paf[_x], paf[_y])) for (start, end), (_x, _y) in zip(map2joints, map2paf)]
+    heatmap_title_image = [(f'heatmap {_l}', visualize_heatmap(_h)) for _l, _h in zip(map2str, heatmap)]
+    paf_title_image = [(f'paf {map2str[start]}-{map2str[end]}', visualize_paf(paf[_x], paf[_y])) for
+                       (start, end), (_x, _y) in
+                       zip(map2joints, map2paf)]
 
     flg, axes = plt.subplots(2, 26, figsize=(52, 4))
 
@@ -243,3 +249,101 @@ def show_heatmaps_paf(heatmap: np.ndarray, paf: np.ndarray):
 
     plt.tight_layout()
     plt.show()
+
+
+def __generate_grid_xy(shape):
+    grid_x = np.tile(np.arange(shape[1], dtype=np.float32), (shape[0], 1))
+    grid_y = np.tile(np.arange(shape[0], dtype=np.float32), (shape[1], 1)).transpose()
+    grid_xy = np.stack((grid_x, grid_y), axis=2)
+    return grid_xy
+
+
+def generate_heatmaps(shape: (int, int), joints_xy: list[list], sigma=5., *,
+                      grid_xy: np.ndarray = None) -> np.ndarray:
+    if grid_xy is None:
+        grid_xy = __generate_grid_xy(shape)
+
+    heatmaps = np.zeros((26, *shape), dtype=np.float32)
+    for joints in joints_xy:
+        for heatmap, xy in zip(heatmaps, joints):
+            if xy is None:
+                continue
+            grid_vec = np.subtract(grid_xy, xy)
+            square_distance = np.sum(np.square(grid_vec), axis=2)
+            gaussian_heatmap = np.exp(-0.5 / sigma ** 2 * square_distance)
+            np.maximum(heatmap, gaussian_heatmap, out=heatmap)
+
+    heatmaps[25] = np.ones(shape, dtype=np.float32) - np.maximum.reduce(heatmaps)  # background
+    return heatmaps
+
+
+def generate_pafs(shape: (int, int), joints_xy: list[list], half_width=5., *, grid_xy: np.ndarray = None) -> np.ndarray:
+    if grid_xy is None:
+        grid_xy = __generate_grid_xy(shape)
+
+    pafs = np.zeros((52, *shape), dtype=np.float32)
+    for joints in joints_xy:
+        for (j0, j1), (_x, _y) in zip(map2joints, map2paf):
+            start = joints[j0]
+            end = joints[j1]
+
+            if start is None or end is None:
+                continue
+
+            vec = np.subtract(end, start)
+            vec_norm = np.linalg.norm(vec)
+            if vec_norm == 0.:
+                continue
+
+            vec_unit = vec / vec_norm
+            grid_vec = np.subtract(grid_xy, start)
+
+            grid_dot = np.dot(grid_vec, vec_unit)
+            grid_cross = np.cross(grid_vec, vec_unit)
+
+            condition = np.logical_and.reduce(
+                (grid_dot > 0., grid_dot < vec_norm, grid_cross > -half_width, grid_cross < half_width))
+
+            paf = pafs[_x:_y + 1]
+            roi = paf[:, condition]
+            vec_o = np.expand_dims(vec_unit, 1) + roi
+            vec_o /= np.linalg.norm(vec_o, axis=0)
+            paf[:, condition] = vec_o
+
+    return pafs
+
+
+body25_map2ha4m = [27, 3, 12, 13, 14, 5, 6, 7, 0, 22, 23, 24, 18, 19, 20, 30, 28, 31, 29, 21, -1, -1, 25, -1, -1]
+
+
+def ha4m_labels(folder: str):
+    # image_shape = (1536, 2048)
+    output_shape = (23, 31)
+    scale = 368 / 1536 / 16
+    labels = []
+    if not os.path.isdir(folder):
+        raise ValueError(f"{folder} doesn't exist or isn't a folder.")
+
+    files = sorted(os.listdir(folder))
+
+    counter = 0
+    total_count = len(files)
+
+    for file in files:
+        file_path = os.path.join(folder, file)
+        with open(file_path, 'r') as f:
+            lines = f.readlines()[1:]
+
+        joints: list = [None] * 25
+        for i, idx in enumerate(body25_map2ha4m):
+            if idx == -1:
+                continue
+            parts: list = lines[idx].split()
+            joints[i] = (float(parts[10]) * scale, float(parts[11]) * scale)
+
+        heatmaps = generate_heatmaps(output_shape, [joints])
+        pafs = generate_pafs(output_shape, [joints])
+        labels.append((heatmaps, pafs))
+
+        counter += 1
+        print(f"\r{counter}/{total_count}.", end='')
