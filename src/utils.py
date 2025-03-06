@@ -1,9 +1,12 @@
 import torch
 import numpy as np
 import os
+import time
 
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 try_cuda = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+fashion_mnist_labels = ["T-shit", "Trouser", "Pullover", "Dress", "Coat", "Sandal", "Shirt", "Sneaker", "Bag", "Ankle Boot"]
 
 
 def _word_tokenize(text: str, lower=True, filter_stopwords=False, filter_punctuation=False, user_filter=None):
@@ -64,7 +67,10 @@ class ModelManager:
             total_loss = 0.
             curr_iter = 0
             if not print_cuda_memory:
-                print(f"epoch {epoch}/{epochs}...")
+                print(f"———————— epoch {epoch}/{epochs} ————————")
+
+            time_start = time.time()
+            time_last = time_start
             for x, y in loader:
                 x = x.to(device)
                 y = y.to(device)
@@ -89,12 +95,19 @@ class ModelManager:
 
                 if print_cuda_memory:
                     print(f"CUDA memory usage: {torch.cuda.memory_reserved() // 1024 // 1024} MB.")
-                    print(f"epoch 1/{epochs}...")
+                    print(f"———————— epoch 1/{epochs} ————————")
                     print_cuda_memory = False
+
                 if curr_iter % 5 == 0:
-                    print(f"\r{curr_iter}/{num_iter_per_epoch}. sum of loss: {total_loss:.4f}", end="")
+                    time_now = time.time()
+                    print(f"\rbatch: {curr_iter}/{num_iter_per_epoch}    "
+                          f"loss: {total_loss:.4f}    "
+                          f"speed: {(time_now - time_last) * 200:.2f}ms/batch", end="")
+                    time_last = time_now
+
             print(f"\r{num_iter_per_epoch}/{num_iter_per_epoch}.")
-            print(f"sum of loss: {total_loss}.")
+            print(f"sum of loss: {total_loss:.4f}.")
+            print(f"time taken: {time.time() - time_start:.2f}s.")
 
     def test(self, loader: torch.utils.data.DataLoader, score_f, device: torch.device = try_cuda):
         self.model.to(device)
@@ -253,20 +266,17 @@ class Corpus:
         return torch.utils.data.DataLoader(packed_seq, batch_size=batch_size, shuffle=random_sample, drop_last=True)
 
 
-def load_fashion_mnist(batch_size, size=28, train=True, get_labels=False):
+def load_fashion_mnist(batch_size, size=28, train=True):
     import torchvision
 
-    str_labels = ["T-shit", "Trouser", "Pullover", "Dress", "Coat", "Sandal", "Shirt", "Sneaker", "Bag", "Ankle Boot"]
-    mnist_train = torchvision.datasets.FashionMNIST(root=os.path.join(project_root, "data"),
+    mnist = torchvision.datasets.FashionMNIST(root=os.path.join(project_root, "data"),
                                                     transform=torchvision.transforms.ToTensor() if size == 28 else
                                                     torchvision.transforms.Compose(
                                                         (torchvision.transforms.ToTensor(),
                                                          torchvision.transforms.Resize(size)))
                                                     , train=train, download=True)
-    mnist_loader = torch.utils.data.DataLoader(mnist_train, batch_size=batch_size, shuffle=True)
+    mnist_loader = torch.utils.data.DataLoader(mnist, batch_size=batch_size, shuffle=True)
 
-    if get_labels:
-        return mnist_loader, str_labels
     return mnist_loader
 
 

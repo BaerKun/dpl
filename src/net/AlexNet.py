@@ -2,6 +2,7 @@ import torch
 from torch import nn
 import utils
 
+num_classes = 10
 AlexNet = torch.nn.Sequential(
     nn.Conv2d(1, 96, 11, 4, 1),
     nn.MaxPool2d(3, 2), nn.ReLU(),
@@ -12,11 +13,9 @@ AlexNet = torch.nn.Sequential(
     nn.Conv2d(384, 256, 3, 1, 1), nn.BatchNorm2d(256),
     nn.MaxPool2d(3, 2), nn.ReLU(),
     nn.Flatten(),
-    nn.Linear(256 * 5 * 5, 4096), nn.ReLU(),
-    nn.Dropout(0.5),
-    nn.Linear(4096, 4096), nn.ReLU(),
-    nn.Dropout(0.5),
-    nn.Linear(4096, 10)
+    nn.Linear(256 * 5 * 5, 4096), nn.ReLU(), nn.Dropout(0.5),
+    nn.Linear(4096, 4096), nn.ReLU(), nn.Dropout(0.5),
+    nn.Linear(4096, num_classes)
 )
 
 loader = utils.load_fashion_mnist(96, 224)

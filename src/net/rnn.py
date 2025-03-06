@@ -74,7 +74,7 @@ vocab = corpus.build_vocab(8)
 loader = corpus.get_loader(256, 16, random_sample=True)
 model = RNNModel(len(vocab), 256, 4, 512)
 
-mm = utils.ModelManager(model, os.path.join(utils.project_root, "model", "rnn.pt"), seq2seq=True, output_state=True)
+mm = utils.ModelManager(model, os.path.join(utils.project_root, "weights", "rnn.pt"), seq2seq=True, output_state=True)
 # mm = utils.ModelManager(model, seq2seq=True, output_state=True)
 # mm.train(loader, nn.CrossEntropyLoss(), 20, 0.001, warmup_steps=4)
 # mm.save(os.path.join(utils.project_root, "model", "rnn.pt"))

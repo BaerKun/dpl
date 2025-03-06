@@ -8,7 +8,7 @@ import torch
 
 from model import Joint, Skeleton
 
-# 连接到关节点和paf_xy的映射
+# 遍历时到关节点和paf_xy的映射
 # 从颈部向四肢和头部关节点的拓扑排序，保证遍历时，当前连接不可能指向已遍历过的关节点
 map2joints = [[1, 8], [1, 2], [1, 5], [2, 3], [3, 4], [5, 6], [6, 7], [8, 9], [9, 10], [10, 11], [8, 12], [12, 13],
               [13, 14], [1, 0], [0, 15], [15, 17],
@@ -83,8 +83,6 @@ def preprocess_image2tensor(img: np.ndarray, scale: float) -> torch.Tensor:
 
 
 def postprocess_heatmap_paf(heatmap: np.ndarray, paf: np.ndarray, output_shape: (int, int)):
-    stride = 8
-
     def __process(_x: np.ndarray):
         _y = np.transpose(np.squeeze(_x), (1, 2, 0))
         _y = cv2.resize(_y, (output_shape[1], output_shape[0]), interpolation=cv2.INTER_CUBIC)
@@ -93,6 +91,7 @@ def postprocess_heatmap_paf(heatmap: np.ndarray, paf: np.ndarray, output_shape: 
     return __process(heatmap), __process(paf)
 
 
+# 返回所有关节点的候选点列表
 def nms_heatmap(heatmaps: np.ndarray, threshold: float) -> list[list[Joint]]:
     joints = []
 
@@ -180,8 +179,8 @@ def rebuild_skeletons(connections: list[(Joint, Joint, float)]) -> list[Skeleton
     for (joint0_idx, joint1_idx), connection in zip(map2joints, connections):
         if not connection:
             continue
-        for joint0, joint1, score in connection:  # = 1:size(temp,1)
-            for cand_skel in candidate_skeleton:  # 1:size(subset,1):
+        for joint0, joint1, score in connection:
+            for cand_skel in candidate_skeleton:
                 if cand_skel[joint0_idx] is joint0:
                     # 因为拓扑排序，只可能是id0出现重复，
                     # 而一般id1不可能出现在之前的骨架中，

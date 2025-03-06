@@ -1,6 +1,9 @@
+__pycache__
+
 .idea
+
 data
 weights
-__pycache__
 images
+
 tmp*
