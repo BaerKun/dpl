@@ -1,6 +1,5 @@
 import torch
 from torch import nn
-import utils
 
 
 class Residual(nn.Module):
@@ -31,28 +30,23 @@ def resnet_block(in_channels, out_channels, num_residuals, use_1x1conv=True):
     return nn.Sequential(*blocks)
 
 
-num_classes = 10
-net = nn.Sequential(
-    nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False),
-    nn.BatchNorm2d(64), nn.ReLU(),
-    nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
+class ResNet(nn.Module):
+    def __init__(self, num_classes):
+        super().__init__()
+        self.layers = nn.Sequential(
+            nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False),
+            nn.BatchNorm2d(64), nn.ReLU(),
+            nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
 
-    resnet_block(64, 64, 2, False),
-    resnet_block(64, 128, 2),
-    resnet_block(128, 256, 2),
-    resnet_block(256, 512, 2),
+            resnet_block(64, 64, 2, False),
+            resnet_block(64, 128, 2),
+            resnet_block(128, 256, 2),
+            resnet_block(256, 512, 2),
 
-    nn.AdaptiveAvgPool2d((1, 1)),
-    nn.Flatten(),
-    nn.Linear(512, num_classes)
-)
+            nn.AdaptiveAvgPool2d((1, 1)),
+            nn.Flatten(),
+            nn.Linear(512, num_classes)
+        )
 
-mm = utils.ModelManager(net, "../../weights/resnet.pt")
-loader = utils.load_fashion_mnist(128, 96)
-mm.train(loader, nn.CrossEntropyLoss(), 5)
-mm.test(loader, utils.score_acc)
-
-loader = utils.load_fashion_mnist(128, 96, False)
-mm.test(loader, utils.score_acc)
-
-mm.save("../../weights/resnet.pt")
+    def forward(self, x):
+        return self.layers(x)

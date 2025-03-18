@@ -1,6 +1,5 @@
 import torch
 from torch import nn
-import utils
 
 
 class SEAttention(nn.Module):
@@ -69,7 +68,7 @@ class Bneck(nn.Module):
 
 
 class MobileNetV3(nn.Module):
-    def __init__(self, in_channels, num_classes, use_large=False):
+    def __init__(self, in_channels, num_classes, mode="small"):
         super().__init__()
 
         relu = nn.ReLU(inplace=True)
@@ -80,7 +79,7 @@ class MobileNetV3(nn.Module):
             nn.BatchNorm2d(16), h_swish
         )
 
-        if use_large:
+        if mode == "large":
             self.blocks = nn.Sequential(
                 Bneck(16, 16, 16, 3, 1, False, relu),
                 Bneck(16, 64, 24, 3, 2, False, relu),
@@ -107,7 +106,7 @@ class MobileNetV3(nn.Module):
                 nn.Linear(960, 1280), h_swish,
                 nn.Linear(1280, num_classes))
 
-        else:
+        elif mode == "small":
             self.blocks = nn.Sequential(
                 Bneck(16, 16, 16, 3, 2, True, relu),
                 Bneck(16, 72, 24, 3, 2, False, relu),
@@ -130,19 +129,11 @@ class MobileNetV3(nn.Module):
                 nn.Linear(576, 1024), h_swish,
                 nn.Linear(1024, num_classes))
 
+        else:
+            raise ValueError("mode must be 'small' or 'large'")
+
     def forward(self, x):
         y = self.stem(x)
         y = self.blocks(y)
         y = self.classify(y)
         return y
-
-
-mm = utils.ModelManager(MobileNetV3(1, 10, False), "../../weights/mobilenetv3.pt")
-dataloader = utils.load_fashion_mnist(batch_size=64, size=224, train=True)
-mm.train(dataloader, nn.CrossEntropyLoss(), 5)
-mm.test(dataloader, utils.score_acc)
-
-dataloader = utils.load_fashion_mnist(batch_size=64, size=224, train=False)
-mm.test(dataloader, utils.score_acc)
-
-mm.save("../../weights/mobilenetv3.pt")

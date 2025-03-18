@@ -109,6 +109,8 @@ class ModelManager:
             print(f"sum of loss: {total_loss:.4f}.")
             print(f"time taken: {time.time() - time_start:.2f}s.")
 
+        print("———————— train over ————————")
+
     def test(self, loader: torch.utils.data.DataLoader, score_f, device: torch.device = try_cuda):
         self.model.to(device)
         self.model.eval()
