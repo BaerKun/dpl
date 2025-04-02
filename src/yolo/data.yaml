@@ -1,0 +1,7 @@
+# data.yaml
+path: images
+train: train
+val: val
+nc: 3  # 类别数
+names: ['R', 'IN', 'ACT']  # 类别名称
+kpt_shape: [5, 2]
