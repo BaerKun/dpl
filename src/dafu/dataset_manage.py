@@ -1,5 +1,5 @@
 import os
-from preprocess import yolo_load_label
+from yolo import yolo_load_label
 
 
 def remove(mode: str = "train"):
