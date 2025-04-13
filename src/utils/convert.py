@@ -1,7 +1,7 @@
 import torch
 import openvino as ov
 
-def convert2openvino(model, save_path, weight_path=None):
+def to_openvino(model, save_path, weight_path=None):
     if weight_path:
         model.load_state_dict(torch.load(weight_path, weights_only=True))
     model.eval()

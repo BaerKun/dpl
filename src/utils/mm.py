@@ -1,12 +1,13 @@
 import torch
 import time
-from .other import tensor2image, show_image
 
 try_cuda = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+
 class ModelManager:
     model: torch.nn.Module
-    def __init__(self, model: torch.nn.Module, weights_path:str=None, seq2seq=False, output_state=False):
+
+    def __init__(self, model: torch.nn.Module, weights_path: str = None, seq2seq=False, output_state=False):
         self.model = model
         if weights_path is not None:
             self.model.load_state_dict(torch.load(weights_path, weights_only=True))
@@ -106,39 +107,22 @@ class ModelManager:
     def save(self, path: str):
         torch.save(self.model.state_dict(), path)
 
-    # return (batch_size, predict_steps)
+    # return_shape = (batch_size, predict_steps, ...)
     def predict_seq(self, x: torch.Tensor, predict_steps, init_state: torch.Tensor = None,
                     device: torch.device = try_cuda) -> (torch.Tensor, torch.Tensor):
         self.model.to(device)
         self.model.eval()
+
         x = x.to(device)
-
-        if x.ndim == 1:
-            x = x.unsqueeze(0)
-        y_hat, state = self.model(x, init_state)
-        y_prev = y_hat[:, -1].argmax(dim=1, keepdims=True)
-        y_pred = [y_prev]
-
+        state = init_state
+        y_pred = []
         for i in range(predict_steps - 1):
-            y_hat, state = self.model(y_prev, state)
-            y_prev = y_hat.argmax(dim=2)
-            y_pred.append(y_prev)
+            y_hat, state = self.model(x, state)
+            y_pred.append(y_hat)
+            x = y_hat
 
         return torch.cat(y_pred, dim=1), state
 
-    def predict_with_image(self, x: torch.Tensor, str_labels=None, device: torch.device = try_cuda) -> bool:
-        self.model.to(device)
-        self.model.eval()
-
-        x = x.to(device)
-        y_hat = self.model(x)
-        for x_b, y_hat_b in zip(x, y_hat):
-            img = tensor2image(x_b)
-            prob = y_hat_b.softmax(dim=0).max()
-            label = y_hat_b.argmax(dim=0)
-            label = str(label) if str_labels is None else str_labels[label]
-            if show_image(img, label, prob) is False:
-                return False
 
 def score_acc(y_hat: torch.Tensor, y: torch.Tensor):
     y_hat = y_hat.argmax(dim=1)

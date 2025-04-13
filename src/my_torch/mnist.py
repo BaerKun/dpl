@@ -17,8 +17,7 @@ key_file = {
     'test_label': 't10k-labels-idx1-ubyte.gz'
 }
 
-dataset_dir = os.path.dirname(os.path.abspath(__file__))
-save_file = dataset_dir + "/mnist.pkl"
+dataset_dir = ""
 
 train_num = 60000
 test_num = 10000
@@ -72,14 +71,16 @@ def _convert_numpy():
     return dataset
 
 
-def init_mnist():
+def init_mnist(mnist_dir):
+    global dataset_dir
+    dataset_dir = mnist_dir
+
+    if not os.path.exists(dataset_dir):
+        os.makedirs(dataset_dir)
+
     download_mnist()
     dataset = _convert_numpy()
     print("Creating pickle file ...")
-    with open(save_file, 'wb') as f:
+    with open(os.path.join(mnist_dir, "mnist.pkl"), 'wb') as f:
         pickle.dump(dataset, f, -1)
     print("Done!")
-
-
-if __name__ == '__main__':
-    init_mnist()

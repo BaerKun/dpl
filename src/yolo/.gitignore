@@ -1,7 +1,9 @@
-datasets
 runs
 
 backup
 img
 txt
+
+data.yaml
 Map2.x86_64
+yolo11n.pt

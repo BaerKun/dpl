@@ -1,5 +1,5 @@
 import os
-from preprocess import Label, load_label
+from preprocess import yolo_load_label
 
 
 def remove(mode: str = "train"):
@@ -8,7 +8,7 @@ def remove(mode: str = "train"):
 
     for label in os.listdir(labels_folder):
         label_path = os.path.join(labels_folder, label)
-        label_lines = load_label(label_path)
+        label_lines = yolo_load_label(label_path)
         if len(label_lines) > 2:
             image_path = os.path.join(images_folder, label.replace(".txt", ".png"))
             os.remove(image_path)
@@ -22,7 +22,7 @@ def statistics(labels_folder: str):
 
     for label_filename in os.listdir(labels_folder):
         label_path = os.path.join(labels_folder, label_filename)
-        labels = load_label(label_path)
+        labels = yolo_load_label(label_path)
         freq_num[len(labels)] += 1
         for label in labels:
             class_num[label.cls] += 1

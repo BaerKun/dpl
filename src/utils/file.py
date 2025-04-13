@@ -1,14 +1,15 @@
 import os.path
 import torch
-from .text import Corpus
+from .sequence import Corpus
 
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-fashion_mnist_labels = ["T-shit", "Trouser", "Pullover", "Dress", "Coat", "Sandal", "Shirt", "Sneaker", "Bag",
-                        "Ankle Boot"]
 
 
-def load_fashion_mnist(batch_size, size=28, train=True):
+def load_fashion_mnist(batch_size, size=28, train=True, return_str_labels=False):
     import torchvision
+
+    fashion_mnist_labels = ["T-shit", "Trouser", "Pullover", "Dress", "Coat", "Sandal", "Shirt", "Sneaker", "Bag",
+                            "Ankle Boot"]
 
     mnist = torchvision.datasets.FashionMNIST(root=os.path.join(project_root, "data"),
                                               transform=torchvision.transforms.ToTensor() if size == 28 else
@@ -18,6 +19,8 @@ def load_fashion_mnist(batch_size, size=28, train=True):
                                               , train=train, download=True)
     mnist_loader = torch.utils.data.DataLoader(mnist, batch_size=batch_size, shuffle=True)
 
+    if return_str_labels:
+        return mnist_loader, fashion_mnist_labels
     return mnist_loader
 
 

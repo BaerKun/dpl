@@ -1,17 +1,24 @@
+import os
 import numpy as np
+import optim, trainer, data, network, loss, transform, mnist
+from utils.file import project_root
 
-from my_torch import optim, trainer, data, network, loss, transform
+mnist_dir = os.path.join(project_root, "datasets/mnist")
+mnist.init_mnist(mnist_dir)
+dataset = data.Dataset(os.path.join(mnist_dir, "mnist.pkl"), (transform.to_one_hot, transform.to_float32))
 
-dataset = data.Dataset("mnist.pkl", (transform.to_one_hot, transform.to_float32))
 dataloader = data.DataLoader(dataset, 512)
-net = network.load("m1.pkl")
+
+net = network.LeNet()
+
 loss_func = loss.CrossEntropyLoss()
-optimizer = optim.SGD(0.00001, 0.0001)
+
+optimizer = optim.AdaGrad(0.00001, 0.0001)
 optimizer.push_params(net.get_params())
 
 _trainer = trainer.Trainer(dataset, dataloader, net, loss_func, optimizer)
 
-for loss in _trainer.train(20):
+for loss in _trainer.train(10):
     print(loss)
 
 accuracy = 0
@@ -23,4 +30,4 @@ for _data, _target in dataloader:
 accuracy /= len(dataloader)
 print(accuracy)
 
-net.save("m1.pkl")
+net.save(os.path.join(project_root, "m1.pkl"))
