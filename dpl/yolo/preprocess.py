@@ -2,7 +2,7 @@ import cv2
 import os
 import random
 from datetime import datetime
-from utils.basedata import KeyPoints
+from dpl.basedata import KeyPoints
 
 
 class YoloPoseLabel:
@@ -11,7 +11,7 @@ class YoloPoseLabel:
         self.key_points = KeyPoints(key_points)
 
 
-def yolo_load_label(label_path):
+def load_label(label_path):
     labels = []
     with open(label_path, 'r') as f:
         lines = f.readlines()
@@ -24,7 +24,7 @@ def yolo_load_label(label_path):
     return labels
 
 
-def yolo_save_label(labels: list[YoloPoseLabel], save_path: str):
+def save_label(labels: list[YoloPoseLabel], save_path: str):
     with open(save_path, 'w') as f:
         for label in labels:
             box = label.key_points.bounding_box()
@@ -38,7 +38,7 @@ def yolo_save_label(labels: list[YoloPoseLabel], save_path: str):
                     f"{' '.join([str(coord) for coord in label.key_points.np.flatten()])}\n")
 
 
-def yolo_preprocess(images_dir, labels_dir, datasets_dir, prep_image, mode:str, max_count: int = None):
+def preprocess_dir(images_dir, labels_dir, datasets_dir, prep_image, mode:str, max_count: int = None):
     if mode not in ['train', 'val']:
         raise ValueError("mode must be one of 'train', 'val'")
 
@@ -68,7 +68,7 @@ def yolo_preprocess(images_dir, labels_dir, datasets_dir, prep_image, mode:str, 
 
         label_filename = os.path.splitext(image_filename)[0] + '.txt'
         label_path = os.path.join(labels_dir, label_filename)
-        labels = yolo_load_label(label_path)
+        labels = load_label(label_path)
 
         str_time = datetime.now().strftime("%H%M%S%f")
         image_save_path = os.path.join(output_images_dir, str_time + '.png')
@@ -81,7 +81,7 @@ def yolo_preprocess(images_dir, labels_dir, datasets_dir, prep_image, mode:str, 
         for label in labels:
             label.key_points.transform_local(matrix)
             processed_labels.append(label)
-        yolo_save_label(processed_labels, label_save_path)
+        save_label(processed_labels, label_save_path)
 
         counter += 1
         if max_count is not None and counter == max_count:

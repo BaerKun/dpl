@@ -312,37 +312,4 @@ def generate_pafs(shape: (int, int), joints_xy: list[list], half_width=5., *, gr
     return pafs
 
 
-body25_map2ha4m = [27, 3, 12, 13, 14, 5, 6, 7, 0, 22, 23, 24, 18, 19, 20, 30, 28, 31, 29, 21, -1, -1, 25, -1, -1]
-
-
-def ha4m_labels(folder: str):
-    # image_shape = (1536, 2048)
-    output_shape = (23, 31)
-    scale = 368 / 1536 / 16
-    labels = []
-    if not os.path.isdir(folder):
-        raise ValueError(f"{folder} doesn't exist or isn't a folder.")
-
-    files = sorted(os.listdir(folder))
-
-    counter = 0
-    total_count = len(files)
-
-    for file in files:
-        file_path = os.path.join(folder, file)
-        with open(file_path, 'r') as f:
-            lines = f.readlines()[1:]
-
-        joints: list = [None] * 25
-        for i, idx in enumerate(body25_map2ha4m):
-            if idx == -1:
-                continue
-            parts: list = lines[idx].split()
-            joints[i] = (float(parts[10]) * scale, float(parts[11]) * scale)
-
-        heatmaps = generate_heatmaps(output_shape, [joints])
-        pafs = generate_pafs(output_shape, [joints])
-        labels.append((heatmaps, pafs))
-
-        counter += 1
-        print(f"\r{counter}/{total_count}.", end='')
+# body25_map2ha4m = [27, 3, 12, 13, 14, 5, 6, 7, 0, 22, 23, 24, 18, 19, 20, 30, 28, 31, 29, 21, -1, -1, 25, -1, -1]

@@ -1,7 +1,7 @@
 import os
 import numpy as np
 import optim, trainer, data, network, loss, transform, mnist
-from utils.file import project_root
+from dpl.file import project_root
 
 mnist_dir = os.path.join(project_root, "datasets/mnist")
 mnist.init_mnist(mnist_dir)

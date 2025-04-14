@@ -1,11 +1,11 @@
 from posebody25detector import PoseBody25Detector
 from util import draw_body_pose
 import cv2
-import utils
+import dpl
 import os
 
-weights_path = utils.project_root + "/weights/pose_body25.pt"
-image_dir = os.path.join(utils.project_root, "images")
+weights_path = dpl.project_root + "/weights/pose_body25.pt"
+image_dir = os.path.join(dpl.project_root, "images")
 
 detector = PoseBody25Detector(weights_path)
 for img_path in os.listdir(image_dir):
