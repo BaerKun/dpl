@@ -4,29 +4,38 @@ import time
 try_cuda = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
+def _dict_add(_inout: dict, _in: dict):
+    if not _inout:
+        for key, value in _in.items():
+            _inout[key] = value
+        return
+    for key in _in.keys():
+        _inout[key] += _in[key]
+
+
 class ModelManager:
     model: torch.nn.Module
 
-    def __init__(self, model: torch.nn.Module, weights_path: str = None, seq2seq=False, output_state=False):
+    def __init__(self, model: torch.nn.Module, weights_path: str = None):
         self.model = model
         if weights_path is not None:
             self.model.load_state_dict(torch.load(weights_path, weights_only=True))
-        self.__seq2seq = seq2seq
-        self.__output_state = output_state
 
-    def train(self, loader: torch.utils.data.DataLoader, loss_f, epochs: int, lr: float = 0.001,
-              warmup_steps=0, device: torch.device = try_cuda):
+    def train(self, loader: torch.utils.data.DataLoader, score_f, epochs: int, lr: float = 0.001,
+              device: torch.device = try_cuda):
         self.model.to(device)
         self.model.train()
         optimizer = torch.optim.Adam(self.model.parameters(), lr=lr)
 
-        num_iter_per_epoch = str(len(loader))
+        num_iter_per_epoch = len(loader)
         print_cuda_memory = device.type == "cuda"
+
+        print("———————— train start ————————")
         print("start training.")
         print(f"device: {device.type}.")
 
         for epoch in range(1, epochs + 1):
-            total_loss = 0.
+            total_score = {}
             curr_iter = 0
             if not print_cuda_memory:
                 print(f"———————— epoch {epoch}/{epochs} ————————")
@@ -38,37 +47,33 @@ class ModelManager:
                 y = y.to(device)
 
                 y_hat = self.model(x)
-                if self.__seq2seq:
-                    if self.__output_state:
-                        y_hat = y_hat[0]
-                    if warmup_steps != 0:
-                        y_hat = y_hat[:, warmup_steps:]
-                        y = y[:, warmup_steps:]
-                    y_hat = y_hat.flatten(0, 1)
-                    y = y.flatten(0, 1)
+                score = score_f(y_hat, y)
+                if not isinstance(score, dict):
+                    score = {"loss": score}
 
-                loss = loss_f(y_hat, y)
-                total_loss += loss.item()
+                _dict_add(total_score, score)
 
                 optimizer.zero_grad()
-                loss.backward()
+                score['loss'].backward()
                 optimizer.step()
                 curr_iter += 1
 
                 if print_cuda_memory:
-                    print(f"CUDA memory usage: {torch.cuda.memory_reserved() // 1024 // 1024} MB.")
+                    print(f"cuda memory usage: {torch.cuda.memory_reserved() // 1024 // 1024} MB.")
                     print(f"———————— epoch 1/{epochs} ————————")
                     print_cuda_memory = False
 
                 if curr_iter % 5 == 0:
                     time_now = time.time()
-                    print(f"\rbatch: {curr_iter}/{num_iter_per_epoch}    "
-                          f"loss: {total_loss:.4f}    "
-                          f"speed: {(time_now - time_last) * 200:.2f}ms/batch", end="")
+                    score_str = [f"| {key}: {value:.2f}" for key, value in score.items()]
+                    print(f"\rbatch: {curr_iter}/{num_iter_per_epoch} | "
+                          f"speed: {(time_now - time_last) * 200:.2f}ms/batch",
+                          *score_str, end="")
                     time_last = time_now
 
-            print(f"\r{num_iter_per_epoch}/{num_iter_per_epoch}.")
-            print(f"sum of loss: {total_loss:.4f}.")
+            print(f"\rbatch: {num_iter_per_epoch}/{num_iter_per_epoch}.")
+            for key, value in total_score.items():
+                print(f"{key}: {value / num_iter_per_epoch:.4f}")
             print(f"time taken: {time.time() - time_start:.2f}s.")
 
         print("———————— train over ————————")
@@ -77,24 +82,31 @@ class ModelManager:
         self.model.to(device)
         self.model.eval()
 
-        num_iter_per_epoch = str(len(loader))
+        num_iter_per_epoch = len(loader)
         curr_iter = 0
-        score = 0.
+        total_score = {}
+
+        print("———————— test start ————————")
         for x, y in loader:
             x = x.to(device)
             y = y.to(device)
 
             with torch.no_grad():
                 y_hat = self.model(x)
-                if self.__output_state:
-                    y_hat = y_hat[0]
-                score += score_f(y_hat, y)
+                score = score_f(y_hat, y)
+                if not isinstance(score, dict):
+                    score = {"loss": score}
+                _dict_add(total_score, score)
 
             curr_iter += 1
             if curr_iter % 5 == 0:
-                print(f"\r{curr_iter}/{num_iter_per_epoch}.", end="")
-        print(f"\r{num_iter_per_epoch}/{num_iter_per_epoch}.")
-        print(f"mean score: {score / len(loader)}")
+                print(f"\rbatch: {curr_iter}/{num_iter_per_epoch}.", end="")
+
+        print(f"\rbatch: {num_iter_per_epoch}/{num_iter_per_epoch}.")
+        for key, value in total_score.items():
+            print(f"{key}: {value / num_iter_per_epoch:.4f}")
+
+        print("———————— test over ————————")
 
     def predict(self, x: torch.Tensor, device: torch.device = try_cuda):
         self.model.to(device)
@@ -122,8 +134,3 @@ class ModelManager:
             x = y_hat
 
         return torch.cat(y_pred, dim=1), state
-
-
-def score_acc(y_hat: torch.Tensor, y: torch.Tensor):
-    y_hat = y_hat.argmax(dim=1)
-    return (y_hat == y).float().mean().item()

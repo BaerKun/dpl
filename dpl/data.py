@@ -1,17 +1,15 @@
-import os.path
+import os
 import torch
 from .sequence import Corpus
 
-project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 
-
-def load_fashion_mnist(batch_size, size=28, train=True, return_str_labels=False):
+def load_fashion_mnist(dataset_dir, batch_size, size=28, train=True, return_str_labels=False):
     import torchvision
 
     fashion_mnist_labels = ["T-shit", "Trouser", "Pullover", "Dress", "Coat", "Sandal", "Shirt", "Sneaker", "Bag",
                             "Ankle Boot"]
 
-    mnist = torchvision.datasets.FashionMNIST(root=os.path.join(project_root, "data"),
+    mnist = torchvision.datasets.FashionMNIST(root=dataset_dir,
                                               transform=torchvision.transforms.ToTensor() if size == 28 else
                                               torchvision.transforms.Compose(
                                                   (torchvision.transforms.ToTensor(),
@@ -24,8 +22,6 @@ def load_fashion_mnist(batch_size, size=28, train=True, return_str_labels=False)
     return mnist_loader
 
 
-def load_wiki_text(mode: str = "train") -> Corpus:
-    import os
-
-    path = os.path.join(project_root, "data", "wikitext-2", f"wiki.{mode}.tokens")
+def load_wiki_text(dataset_dir, mode: str = "train") -> Corpus:
+    path = os.path.join(dataset_dir, f"wikitext-2/wiki.{mode}.tokens")
     return Corpus(path, user_filter={'=', '<', '>', 'unk'})

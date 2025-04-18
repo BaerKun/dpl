@@ -2,9 +2,6 @@ __pycache__
 
 .idea
 
-datasets
-weights
-images
-projects
+_*
 
 tmp*

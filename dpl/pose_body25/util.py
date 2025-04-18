@@ -310,6 +310,3 @@ def generate_pafs(shape: (int, int), joints_xy: list[list], half_width=5., *, gr
             paf[:, condition] = vec_o
 
     return pafs
-
-
-# body25_map2ha4m = [27, 3, 12, 13, 14, 5, 6, 7, 0, 22, 23, 24, 18, 19, 20, 30, 28, 31, 29, 21, -1, -1, 25, -1, -1]
