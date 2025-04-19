@@ -35,18 +35,43 @@ def _word_tokenize(text: str, lower=True, filter_stopwords=False, filter_punctua
         return __word_tokenize(text, lower, filter_stopwords, filter_punctuation, user_filter)
 
 
-class PackedSeqDataset(torch.utils.data.Dataset):
-    def __init__(self, seq: torch.Tensor, num_steps, offset):
-        self.__num_sub_seqs = (len(seq) - offset - 1) // num_steps
-        invalid_end = self.__num_sub_seqs * num_steps + offset
-        self.data = seq[offset: invalid_end].reshape((self.__num_sub_seqs, num_steps))
-        self.label = seq[offset + 1: invalid_end + 1].reshape((self.__num_sub_seqs, num_steps))
+class SeqDataset(torch.utils.data.Dataset):
+    def __init__(self, data: torch.Tensor, label: torch.Tensor, num_steps, random_offset=True):
+        self.data = data
+        self.label = label
+        self.num_steps = num_steps
+        self.random_offset = random_offset
+
+        self.__refresh()
 
     def __len__(self):
         return self.__num_sub_seqs
 
     def __getitem__(self, item):
-        return self.data[item], self.label[item]
+        return self.__data2load[item], self.__label2load[item]
+
+    def refresh(self):
+        if self.random_offset:
+            self.__refresh()
+
+    def __refresh(self):
+        from random import randint
+
+        offset = randint(0, self.num_steps - 1) if self.random_offset else 0
+        self.__num_sub_seqs = (len(self.data) - offset - 1) // self.num_steps
+        invalid_end = self.__num_sub_seqs * self.num_steps + offset
+
+        self.__data2load = self.data[offset: invalid_end].reshape(
+            (self.__num_sub_seqs, self.num_steps, *self.data.shape[1:]))
+        self.__label2load = self.label[offset + 1: invalid_end + 1].reshape((self.__num_sub_seqs, self.num_steps))
+
+
+class SeqDataLoader(torch.utils.data.DataLoader):
+    dataset: SeqDataset
+
+    def __iter__(self):
+        self.dataset.refresh()
+        return super().__iter__()
 
 
 class Vocab:
@@ -117,7 +142,5 @@ class Corpus:
         return vocab
 
     def get_loader(self, batch_size, num_steps, random_offset=True, random_sample=True):
-        import random
-        packed_seq = PackedSeqDataset(self.tensor_dataset, num_steps,
-                                      random.randint(0, num_steps - 1) if random_offset else 0)
-        return torch.utils.data.DataLoader(packed_seq, batch_size=batch_size, shuffle=random_sample, drop_last=True)
+        dataset = SeqDataset(self.tensor_dataset, self.tensor_dataset, num_steps, random_offset)
+        return SeqDataLoader(dataset, batch_size, random_sample)
