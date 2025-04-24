@@ -43,7 +43,7 @@ class SeqDataset(torch.utils.data.Dataset):
         self.predict_steps = predict_steps
         self.random_offset = random_offset
 
-        self.__refresh()
+        self.__refresh(0)
 
     def __len__(self):
         return self.__num_sub_seqs
@@ -52,18 +52,17 @@ class SeqDataset(torch.utils.data.Dataset):
         return self.__data2load[item], self.__label2load[item]
 
     def refresh(self):
+        from random import randint
+
         if self.random_offset:
-            self.__refresh()
+            self.__refresh(randint(0, self.num_steps - 1))
 
     def __new_shape(self, shape):
         if len(shape) == 1:
             return self.__num_sub_seqs, self.num_steps
         return self.__num_sub_seqs, self.num_steps, *shape[1:]
 
-    def __refresh(self):
-        from random import randint
-
-        offset = randint(0, self.num_steps - 1) if self.random_offset else 0
+    def __refresh(self, offset):
         self.__num_sub_seqs = (len(self.data) - offset - self.predict_steps) // self.num_steps
         invalid_end = self.__num_sub_seqs * self.num_steps + offset
 

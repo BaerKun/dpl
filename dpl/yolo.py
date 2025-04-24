@@ -2,7 +2,7 @@ import cv2
 import os
 import random
 from datetime import datetime
-from dpl.basedata import KeyPoints
+from .basedata import KeyPoints
 
 
 class YoloPoseLabel:
@@ -38,7 +38,7 @@ def save_label(labels: list[YoloPoseLabel], save_path: str):
                     f"{' '.join([str(coord) for coord in label.key_points.np.flatten()])}\n")
 
 
-def preprocess_dir(images_dir, labels_dir, datasets_dir, prep_image, mode: str, max_count: int = None):
+def load_dir(images_dir, labels_dir, datasets_dir, prep_image, mode: str, max_count: int = None):
     if mode not in ['train', 'val']:
         raise ValueError("mode must be one of 'train', 'val'")
 
