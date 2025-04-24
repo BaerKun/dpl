@@ -36,10 +36,11 @@ def _word_tokenize(text: str, lower=True, filter_stopwords=False, filter_punctua
 
 
 class SeqDataset(torch.utils.data.Dataset):
-    def __init__(self, data: torch.Tensor, label: torch.Tensor, num_steps, random_offset=True):
-        self.data = data
-        self.label = label
+    def __init__(self, data: torch.Tensor, label: torch.Tensor, num_steps, predict_steps=1, random_offset=True):
+        self.data = data.contiguous()
+        self.label = label.contiguous()
         self.num_steps = num_steps
+        self.predict_steps = predict_steps
         self.random_offset = random_offset
 
         self.__refresh()
@@ -54,16 +55,21 @@ class SeqDataset(torch.utils.data.Dataset):
         if self.random_offset:
             self.__refresh()
 
+    def __new_shape(self, shape):
+        if len(shape) == 1:
+            return self.__num_sub_seqs, self.num_steps
+        return self.__num_sub_seqs, self.num_steps, *shape[1:]
+
     def __refresh(self):
         from random import randint
 
         offset = randint(0, self.num_steps - 1) if self.random_offset else 0
-        self.__num_sub_seqs = (len(self.data) - offset - 1) // self.num_steps
+        self.__num_sub_seqs = (len(self.data) - offset - self.predict_steps) // self.num_steps
         invalid_end = self.__num_sub_seqs * self.num_steps + offset
 
-        self.__data2load = self.data[offset: invalid_end].reshape(
-            (self.__num_sub_seqs, self.num_steps, *self.data.shape[1:]))
-        self.__label2load = self.label[offset + 1: invalid_end + 1].reshape((self.__num_sub_seqs, self.num_steps))
+        self.__data2load = self.data[offset: invalid_end].view(self.__new_shape(self.data.shape))
+        self.__label2load = (self.label[offset + self.predict_steps: invalid_end + self.predict_steps]
+                             .view(self.__new_shape(self.label.shape)))
 
 
 class SeqDataLoader(torch.utils.data.DataLoader):

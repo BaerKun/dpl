@@ -25,3 +25,12 @@ class KeyPoints:
         width = self.np[:, 0].max() - x
         height = self.np[:, 1].max() - y
         return x, y, width, height
+
+    def __iter__(self):
+        return self.np.__iter__()
+
+    def __getitem__(self, item):
+        return self.np[item]
+
+    def __len__(self):
+        return len(self.np)
