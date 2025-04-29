@@ -1,40 +1,6 @@
 import torch
 
 
-def _word_tokenize(text: str, lower=True, filter_stopwords=False, filter_punctuation=False, user_filter=None):
-    import nltk
-
-    def __download_nltk():
-        nltk.download('punkt_tab')
-        nltk.download('punkt')
-        nltk.download('stopwords')
-
-    def __word_tokenize(_text, _lower, _filter_stopwords, _filter_punctuation, _user_filter):
-        filter_set = set() if _user_filter is None else _user_filter
-        if _filter_stopwords:
-            stopwords = set(nltk.corpus.stopwords.words('english'))
-            filter_set |= stopwords
-        if _filter_punctuation:
-            import string
-            punctuation = set(string.punctuation)
-            filter_set |= punctuation
-        if _lower:
-            _text = _text.lower()
-
-        _text = nltk.word_tokenize(_text)  # 主要的性能消耗
-        if len(filter_set) != 0:
-            _text = [token for token in _text if token not in filter_set]
-
-        return _text
-
-    # 初次使用先运行 download_nltk
-    try:
-        return __word_tokenize(text, lower, filter_stopwords, filter_punctuation, user_filter)
-    except LookupError:
-        __download_nltk()
-        return __word_tokenize(text, lower, filter_stopwords, filter_punctuation, user_filter)
-
-
 class SeqDataset(torch.utils.data.Dataset):
     def __init__(self, data: torch.Tensor, label: torch.Tensor, num_steps, predict_steps=1, random_offset=True):
         self.data = data.contiguous()
@@ -77,6 +43,40 @@ class SeqDataLoader(torch.utils.data.DataLoader):
     def __iter__(self):
         self.dataset.refresh()
         return super().__iter__()
+
+
+def _word_tokenize(text: str, lower=True, filter_stopwords=False, filter_punctuation=False, user_filter=None):
+    import nltk
+
+    def __download_nltk():
+        nltk.download('punkt_tab')
+        nltk.download('punkt')
+        nltk.download('stopwords')
+
+    def __word_tokenize(_text, _lower, _filter_stopwords, _filter_punctuation, _user_filter):
+        filter_set = set() if _user_filter is None else _user_filter
+        if _filter_stopwords:
+            stopwords = set(nltk.corpus.stopwords.words('english'))
+            filter_set |= stopwords
+        if _filter_punctuation:
+            import string
+            punctuation = set(string.punctuation)
+            filter_set |= punctuation
+        if _lower:
+            _text = _text.lower()
+
+        _text = nltk.word_tokenize(_text)  # 主要的性能消耗
+        if len(filter_set) != 0:
+            _text = [token for token in _text if token not in filter_set]
+
+        return _text
+
+    # 初次使用先运行 download_nltk
+    try:
+        return __word_tokenize(text, lower, filter_stopwords, filter_punctuation, user_filter)
+    except LookupError:
+        __download_nltk()
+        return __word_tokenize(text, lower, filter_stopwords, filter_punctuation, user_filter)
 
 
 class Vocab:

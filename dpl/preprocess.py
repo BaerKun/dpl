@@ -84,7 +84,7 @@ def affine(src, scale=1., rotate=0., translate=(0, 0), dst_shape=None):
 
     dst = cv2.warpAffine(src, m, dst_shape)
     m = np.vstack((m, (0, 0, 1)))
-    return dst, m
+    return dst, m.astype(np.float32)
 
 
 def add_noise(src, mean, std=0.):
@@ -95,3 +95,26 @@ def add_noise(src, mean, std=0.):
 
     n = np.random.normal(mean, std, src.shape)
     return cv2.add(src, n, dtype=TYPE_NP_TO_CV[src.dtype])
+
+
+# pts: (N, 2)
+def transform(pts, matrix, out=None, ):
+    w = matrix[:2, :2].T
+    b = matrix[:2, 2].T
+    if out is None:
+        pts = pts @ w
+        pts += b
+        return pts
+
+    out[:] = pts @ w
+    out += b
+    return out
+
+
+# return -> (top_left_x, top_left_y, width, height)
+def bounding_box(pts):
+    x = pts[:, 0].min()
+    y = pts[:, 1].min()
+    width = pts[:, 0].max() - x
+    height = pts[:, 1].max() - y
+    return x, y, width, height
