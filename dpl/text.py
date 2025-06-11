@@ -1,50 +1,6 @@
 import torch
 
 
-class SeqDataset(torch.utils.data.Dataset):
-    def __init__(self, data: torch.Tensor, label: torch.Tensor, num_steps, predict_steps=1, random_offset=True):
-        self.data = data.contiguous()
-        self.label = label.contiguous()
-        self.num_steps = num_steps
-        self.predict_steps = predict_steps
-        self.random_offset = random_offset
-
-        self.__refresh(0)
-
-    def __len__(self):
-        return self.__num_sub_seqs
-
-    def __getitem__(self, item):
-        return self.__data2load[item], self.__label2load[item]
-
-    def refresh(self):
-        from random import randint
-
-        if self.random_offset:
-            self.__refresh(randint(0, self.num_steps - 1))
-
-    def __new_shape(self, shape):
-        if len(shape) == 1:
-            return self.__num_sub_seqs, self.num_steps
-        return self.__num_sub_seqs, self.num_steps, *shape[1:]
-
-    def __refresh(self, offset):
-        self.__num_sub_seqs = (len(self.data) - offset - self.predict_steps) // self.num_steps
-        invalid_end = self.__num_sub_seqs * self.num_steps + offset
-
-        self.__data2load = self.data[offset: invalid_end].view(self.__new_shape(self.data.shape))
-        self.__label2load = (self.label[offset + self.predict_steps: invalid_end + self.predict_steps]
-                             .view(self.__new_shape(self.label.shape)))
-
-
-class SeqDataLoader(torch.utils.data.DataLoader):
-    dataset: SeqDataset
-
-    def __iter__(self):
-        self.dataset.refresh()
-        return super().__iter__()
-
-
 def _word_tokenize(text: str, lower=True, filter_stopwords=False, filter_punctuation=False, user_filter=None):
     import nltk
 
@@ -127,7 +83,7 @@ class Vocab:
 
 
 class Corpus:
-    tensor_dataset: torch.Tensor
+    tensor: torch.Tensor
 
     def __init__(self, root: str, lower=True, filter_stopwords=False, filter_punctuation=False,
                  user_filter: set[str] = None):
@@ -142,10 +98,9 @@ class Corpus:
 
     def build_vocab(self, min_freq=0, max_vocab_size=None) -> Vocab:
         vocab = Vocab(self.corpus, min_freq, max_vocab_size)
-        self.tensor_dataset = vocab.encode(self.corpus)
+        self.tensor = vocab.encode(self.corpus)
         print("vocab size: ", len(vocab))
         return vocab
 
-    def get_loader(self, batch_size, num_steps, random_offset=True, random_sample=True):
-        dataset = SeqDataset(self.tensor_dataset, self.tensor_dataset, num_steps, random_offset)
-        return SeqDataLoader(dataset, batch_size, random_sample)
+    def get_tensor(self):
+        return self.tensor

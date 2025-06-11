@@ -24,6 +24,7 @@ class ModelManager:
     def save(self, path: str):
         torch.save(self.model.state_dict(), path)
 
+    # score_f: (y_hat, y) -> dict, 输出必须包括 'loss'
     def train(self, loader, score_f, epochs: int, lr: float = 0.001, device: torch.device = try_cuda):
         self.model.to(device)
         self.model.train()
