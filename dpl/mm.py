@@ -142,23 +142,3 @@ class ModelManager:
                 x = y_hat[:, -1:]
 
         return torch.cat(y_pred, dim=1), state
-
-
-class ScoreF:
-    @staticmethod
-    def acc(y_hat: torch.Tensor, y: torch.Tensor, argmax=False):
-        if argmax:
-            y_hat = y_hat.argmax(dim=-1)
-        return (y_hat == y).mean(dtype=torch.float32)
-
-    @staticmethod
-    def mae(y_hat: torch.Tensor, y: torch.Tensor):
-        return torch.abs(y_hat - y).mean()
-
-    @staticmethod
-    def mse(y_hat: torch.Tensor, y: torch.Tensor):
-        return ((y_hat - y) ** 2).mean()
-
-    @staticmethod
-    def r2(y_hat: torch.Tensor, y: torch.Tensor):
-        return 1. - ((y - y_hat) ** 2).sum() / ((y - y.mean()) ** 2).sum()
