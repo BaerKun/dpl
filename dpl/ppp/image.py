@@ -62,23 +62,21 @@ def letterbox(src, dst_shape):
     return dst, m
 
 
-# 绕 图像中心 放缩 + 旋转(角度) -> 平移
-def affine(src, scale=1., rotate=0., translate=(0, 0), dst_shape=None):
+# 绕 center(默认图片中心) 放缩 + 旋转(角度；逆时针) -> 平移
+def affine(src, scale=1., rotate=0., translate=(0, 0), center = None, dst_shape=None):
     h, w = src.shape[0], src.shape[1]
 
+    if center is None:
+        center = (w // 2, h // 2)
     if isinstance(scale, tuple):
         scale = random.uniform(*scale)
     if isinstance(rotate, tuple):
         rotate = random.uniform(*rotate)
 
-    m = cv2.getRotationMatrix2D((w // 2, h // 2), rotate, scale)  # (2 x 3)
+    m = cv2.getRotationMatrix2D(center, rotate, scale)  # (2 x 3)
+    m[0, 2] += random.randint(*translate[0]) if isinstance(translate[0], tuple) else translate[0]
+    m[1, 2] += random.randint(*translate[1]) if isinstance(translate[1], tuple) else translate[1]
 
-    if isinstance(translate[0], tuple):
-        m[0, 2] += random.randint(*translate[0])
-        m[1, 2] += random.randint(*translate[1])
-    else:
-        m[0, 2] += translate[0]
-        m[1, 2] += translate[1]
     if dst_shape is None:
         dst_shape = (w, h)
 
@@ -95,26 +93,3 @@ def add_noise(src, mean, std=0.):
 
     n = np.random.normal(mean, std, src.shape)
     return cv2.add(src, n, dtype=TYPE_NP_TO_CV[src.dtype])
-
-
-# pts: (N, 2)
-def transform(pts, matrix, out=None, ):
-    w = matrix[:2, :2].T
-    b = matrix[:2, 2].T
-    if out is None:
-        pts = pts @ w
-        pts += b
-        return pts
-
-    out[:] = pts @ w
-    out += b
-    return out
-
-
-# return -> (top_left_x, top_left_y, width, height)
-def bounding_box(pts):
-    x = pts[:, 0].min()
-    y = pts[:, 1].min()
-    width = pts[:, 0].max() - x
-    height = pts[:, 1].max() - y
-    return x, y, width, height
