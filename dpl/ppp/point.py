@@ -4,38 +4,50 @@ import numpy as np
 class Affine:
     def __init__(self, dims):
         self.dims = dims
-        self.m = np.eye(dims, dims + 1, dtype=np.float32)
 
-        self.linear = self.m[:, :dims]  # rotate + scale
-        self.translation = self.m[:, dims].reshape(dims, 1)
+        self._m = np.eye(dims, dims + 1, dtype=np.float32)
+        self._linear = self._m[:, :dims]  # rotate + scale
+        self._translate = self._m[:, dims].reshape(dims, 1)
 
     def from_matrix(self, matrix: np.ndarray):
-        self.m[:] = matrix[:self.dims, :]
+        self._m[:] = matrix[:self.dims, :]
         return self
 
-    def to_matrix(self):
-        return self.m
+    def get_matrix(self):
+        return self._m.copy()
 
     def transform(self, pts: np.ndarray, col_major=False):
         if col_major:
-            return self.linear @ pts + self.translation
-        return pts @ self.linear.T + self.translation.T
+            return self._linear @ pts + self._translate
+        return pts @ self._linear.T + self._translate.T
 
     def scale(self, *scale):
-        self.m *= np.array(scale, dtype=np.float32).reshape(-1, 1)
+        self._m *= np.array(scale, dtype=np.float32).reshape(-1, 1)
         return self
 
     def rotate(self, rad, axis=None):
-        if self.dims == 2:
-            rotation = np.array(((np.cos(rad), -np.sin(rad)), (np.sin(rad), np.cos(rad))), dtype=np.float32)
-            self.m[:] = rotation @ self.m
-            return self
+        cos = np.cos(rad)
+        sin = np.sin(rad)
 
-        # 3d
+        if self.dims == 2:
+            rotation = np.array((
+                (cos, -sin),
+                (sin, cos)), dtype=np.float32)
+        else:  # 3d
+            axis = np.array(axis, dtype=np.float32).flatten()
+            axis /= np.linalg.norm(axis)
+            k = np.array((
+                (0, -axis[2], axis[1]),
+                (axis[2], 0, -axis[0]),
+                (-axis[1], axis[0], 0)), dtype=np.float32)
+            i = np.eye(3, dtype=np.float32)
+            rotation = i + k @ (i * sin + k * (1 - cos))
+
+        self._m[:] = rotation @ self._m
         return self
 
     def translate(self, *t):
-        self.translation += np.array(t, dtype=np.float32).reshape(self.dims, 1)
+        self._translate += np.array(t, dtype=np.float32).reshape(self.dims, 1)
         return self
 
 
