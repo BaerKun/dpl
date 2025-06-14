@@ -112,4 +112,4 @@ class Affine:
     def link(self, other):
         m2 = other.get_matrix()
         self._m[:] = m2[:, :self.dims] @ self._m
-        self._translate += m2[:, self.dims]
+        self._translate += m2[:, self.dims].reshape(self.dims, 1)

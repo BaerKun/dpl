@@ -69,21 +69,20 @@ def letterbox(src, dst_shape):
 def affine(src, scale=1., rotate=0., translate=(0, 0), scale_y=None, center=None, dst_shape=None):
     h, w = src.shape[0], src.shape[1]
 
-    if center is None:
-        center = (w // 2, h // 2)
-    if dst_shape is None:
-        dst_shape = (w, h)
-
     translate = _random_int_range(translate, depth=1)
     scale_x, scale_y, rotate = _random_float_range((scale, scale_y, rotate), depth=1)
     if scale_y is None:
         scale_y = scale_x
+    if center is None:
+        center = (w // 2, h // 2)
+    if dst_shape is None:
+        dst_shape = (int(w * scale_x), int(h * scale_y))
 
     tf = (datatype.Affine(2)
           .translate(-center[0], -center[1])
-          .rotate(-rotate)
           .scale(scale_x, scale_y)
-          .translate(center[0] + translate[0], center[1] + translate[1]))
+          .rotate(-rotate)
+          .translate(center[0] * scale_x + translate[0], center[1] * scale_y + translate[1]))
 
     dst = cv2.warpAffine(src, tf.get_matrix(), dst_shape)
     return dst, tf
