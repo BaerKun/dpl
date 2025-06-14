@@ -1,6 +1,7 @@
 import numpy as np
 import cv2
 import random
+from . import datatype
 
 TYPE_NP_TO_CV = {
     np.dtype('uint8'): cv2.CV_8U,
@@ -23,22 +24,25 @@ TYPE_CV_TO_NP = {
 }
 
 
-def cut(image, top=0, bottom=0, left=0, right=0):
-    w, h = image.shape[1], image.shape[0]
+def _random_int_range(param, depth=0):
+    if depth == 0:
+        if isinstance(param, (tuple, list)):
+            return random.randint(*param)
+        return param
+    return tuple(_random_int_range(p, depth - 1) for p in param)
 
-    if isinstance(top, tuple):
-        top = random.randint(*top)
-    if isinstance(bottom, tuple):
-        bottom = random.randint(*bottom)
-    if isinstance(left, tuple):
-        left = random.randint(*left)
-    if isinstance(right, tuple):
-        right = random.randint(*right)
 
-    m = np.array(((1., 0., -left),
-                  (0., 1., -top),
-                  (0., 0., 1.)), dtype=np.float32)
-    return image[top: h - bottom, left: w - right], m
+def _random_float_range(param, depth=0):
+    if depth == 0:
+        if isinstance(param, (tuple, list)):
+            return random.uniform(*param)
+        return param
+    return tuple(_random_float_range(p, depth - 1) for p in param)
+
+
+def cut(image, rect: datatype.Rect):
+    tf = datatype.Affine(2).translate(-rect.x, -rect.y)
+    return image[rect.slice()], tf
 
 
 def letterbox(src, dst_shape):
@@ -56,38 +60,37 @@ def letterbox(src, dst_shape):
     dst = cv2.resize(src, (new_width, new_height))
     dst = cv2.copyMakeBorder(dst, padding_y, padding_y, padding_x, padding_x, cv2.BORDER_CONSTANT)
 
-    m = np.array(((scale, 0, padding_x),
-                  (0, scale, padding_y),
-                  (0, 0, 1.)), dtype=np.float32)
-    return dst, m
+    tf = datatype.Affine(2).scale(scale).translate(padding_x, padding_y)
+    return dst, tf
 
 
 # 绕 center(默认图片中心) 放缩 + 旋转(角度；逆时针) -> 平移
-def affine(src, scale=1., rotate=0., translate=(0, 0), center = None, dst_shape=None):
+# scale默认同时作用于 x, y；若scale_y is not None，则 scale, scale_y 分别作用于 x, y
+def affine(src, scale=1., rotate=0., translate=(0, 0), scale_y=None, center=None, dst_shape=None):
     h, w = src.shape[0], src.shape[1]
 
     if center is None:
         center = (w // 2, h // 2)
-    if isinstance(scale, tuple):
-        scale = random.uniform(*scale)
-    if isinstance(rotate, tuple):
-        rotate = random.uniform(*rotate)
-
-    m = cv2.getRotationMatrix2D(center, rotate, scale)  # (2 x 3)
-    m[0, 2] += random.randint(*translate[0]) if isinstance(translate[0], tuple) else translate[0]
-    m[1, 2] += random.randint(*translate[1]) if isinstance(translate[1], tuple) else translate[1]
-
     if dst_shape is None:
         dst_shape = (w, h)
 
-    dst = cv2.warpAffine(src, m, dst_shape)
-    m = np.vstack((m, (0, 0, 1)))
-    return dst, m.astype(np.float32)
+    translate = _random_int_range(translate, depth=1)
+    scale_x, scale_y, rotate = _random_float_range((scale, scale_y, rotate), depth=1)
+    if scale_y is None:
+        scale_y = scale_x
+
+    tf = (datatype.Affine(2)
+          .translate(-center[0], -center[1])
+          .rotate(-rotate)
+          .scale(scale_x, scale_y)
+          .translate(center[0] + translate[0], center[1] + translate[1]))
+
+    dst = cv2.warpAffine(src, tf.get_matrix(), dst_shape)
+    return dst, tf
 
 
 def add_noise(src, mean, std=0.):
-    if isinstance(mean, tuple):
-        mean = random.uniform(*mean)
+    mean, std = _random_float_range((mean, std), depth=1)
     if std == 0.:
         return cv2.add(src, mean)
 
